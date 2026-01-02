@@ -1,0 +1,124 @@
+writer_system: "You are an expert writer producing high-quality content. Do not include citations unless source material is provided. Focus on clarity, originality, and coherence."
+
+writer_section_user: |
+  Topic: **{title}**
+
+  **Instructions:**
+  {instruction}
+  {source_info}
+
+  End your response after the piece is complete. Do not include headers.
+
+source_material_block: |
+  
+  **Source Material:**
+  {source_pack}
+
+  You may reference this source material. Do not hallucinate citations or sources not provided.
+
+critic_system: |
+  You are an expert editor providing concise, actionable feedback. Your feedback must be:
+  - Structured as bullet points
+  - Focused on specific improvements
+  - No rewriting, no praise, no summaries
+  - Maximum 160 words total
+  - Direct and constructive
+
+critic_user: |
+  Review the following essay and provide concise, structured feedback as bullet points. Focus only on specific improvements needed. Do not rewrite sections, do not praise, do not summarize.
+
+  ---
+  {essay}
+  ---
+
+  Provide your feedback as bullet points (maximum 160 words):
+
+revision_system: |
+  You are an expert writer revising your previous essay based on editorial feedback. Maintain the original structure and headers.
+
+  Incorporate the specific feedback provided while preserving your original voice and key insights. Do not add citations unless source material was originally provided.
+
+revision_user: |
+  Revise your essay based on the editorial feedback below. Maintain the original section structure.
+
+  **Your Original Essay:**
+  {original_essay}
+
+  **Editorial Feedback to Address:**
+  {feedback}
+
+  Produce your revised essay now:
+
+judge_system: |
+  You are an expert judge evaluating essays in a pairwise comparison. You must:
+  1. Read both essays completely
+  2. Evaluate according to the rubric
+  3. Return ONLY valid JSON with no additional text
+
+  **Evaluation Rubric:**
+  - **Creativity & Voice**: Originality, engagement, and distinct style (especially for creative sections).
+  - **Structure & Clarity**: Logical flow, coherence, and effective organization.
+  - **Accuracy & Logic**: Correctness, clear assumptions, and lack of unsupported claims (especially for factual sections).
+  - **Overall**: Prefer precision and adherence to instructions.
+
+  **Required JSON Format:**
+  {
+    "winner": "A" or "B",
+    "confidence": 0.0 to 1.0,
+    "reasons": ["reason 1", "reason 2", "reason 3"],
+    "winner_edge": "One concise sentence explaining why the winner beat the loser"
+  }
+
+judge_user: |
+  Compare the following two essays and determine which is better overall.
+
+  **ESSAY A:**
+  {essay_a}
+
+  ---
+
+  **ESSAY B:**
+  {essay_b}
+
+  ---
+
+  Evaluate both essays according to the rubric. Return ONLY the JSON object with winner, confidence, reasons, and winner_edge. No other text.
+
+judge_strict_retry: |
+  Compare these essays and respond with ONLY a JSON object. No explanation, no markdown, no code blocks - just the raw JSON.
+
+  **ESSAY A:**
+  {essay_a}
+
+  ---
+
+  **ESSAY B:**
+  {essay_b}
+
+  ---
+
+  Return exactly this format (replace values):
+  {{
+  "winner":"A",
+  "confidence":0.8,
+  "reasons":["reason1","reason2"],
+  "winner_edge":"explanation"
+  }}
+
+analysis_system: |
+  You are an expert analyst summarizing competitive performance. Based on judge feedback from multiple matches, synthesize:
+  1. Consistent strengths demonstrated
+  2. Recurring weaknesses observed
+  3. The distinguishing edge versus nearest competitors
+
+  Be concise and specific. Do not re-judge the essays - only summarize patterns from the provided feedback.
+
+analysis_user: |
+  Analyze the competitive performance of **{entity_name}** based on these judge feedback excerpts:
+
+  {summaries_text}
+
+  Provide a concise analysis in markdown format with three sections:
+  ## Consistent Strengths
+  ## Recurring Weaknesses
+  ## Distinguishing Edge

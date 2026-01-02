@@ -1,0 +1,89 @@
+# LLM Tournament Configuration
+# ----------------------------
+# This is a sample configuration with 5 writers, 5 critics, and 5 judges.
+# Replace model IDs with actual OpenRouter model identifiers.
+
+# Writer models (generate initial essays)
+writers:
+  - openai/gpt-4-turbo
+  - anthropic/claude-3-opus
+  - anthropic/claude-3-sonnet
+  - google/gemini-pro
+  - mistralai/mistral-large
+
+# Critic models (provide structured feedback)
+critics:
+  - openai/gpt-4-turbo
+  - anthropic/claude-3-opus
+  - anthropic/claude-3-sonnet
+  - google/gemini-pro
+  - mistralai/mistral-large
+
+# Judge models (perform pairwise comparisons)
+judges:
+  - openai/gpt-4-turbo
+  - anthropic/claude-3-opus
+  - anthropic/claude-3-sonnet
+  - google/gemini-pro
+  - mistralai/mistral-large
+
+# Topics for essay generation
+topics:
+  - title: "Artificial Intelligence Ethics"
+    prompts:
+      Essay: |
+        Write a comprehensive essay exploring the ethical implications of artificial
+        intelligence. Consider both the potential benefits and risks, discuss current
+        approaches to AI governance and alignment, and explore the human consequences
+        of AI decision-making in critical domains.
+    source_pack: |
+      Key concepts: Constitutional AI, RLHF (Reinforcement Learning from Human
+      Feedback), interpretability research, AI governance frameworks, the
+      alignment problem, Asilomar AI Principles.
+
+  - title: "Climate Adaptation Strategies"
+    prompts:
+      Essay: |
+        Write a comprehensive essay about climate adaptation strategies. Explore
+        how communities are responding to rising sea levels and changing climate
+        conditions, analyze the economic trade-offs of various adaptation approaches,
+        and discuss the science behind climate predictions and feedback loops.
+    source_pack: |
+      Key concepts: Thermal expansion, ice sheet dynamics, IPCC scenarios,
+      managed retreat, green infrastructure, climate finance mechanisms,
+      loss and damage framework.
+
+# Token limits per role
+token_caps:
+  writer_tokens: 1200      # ~1000 tokens essay + buffer
+  critic_tokens: 200       # ~160 tokens feedback + buffer
+  revision_tokens: 1300    # ~1100 tokens revised essay + buffer
+  judge_tokens: 500        # JSON response + reasoning
+
+# Temperature settings per role
+temperatures:
+  writer: 0.7              # More creative for essays
+  critic: 0.3              # More deterministic feedback
+  revision: 0.5            # Balanced for revisions
+  judge: 0.2               # Very deterministic judgments
+
+# Ranking configuration
+ranking:
+  rounds: 5                          # Swiss-style tournament rounds
+  audit_confidence_threshold: 0.7    # Trigger second judge below this
+  initial_elo: 1500                  # Starting Elo for all candidates
+  k_factor: 32                       # Elo K-factor (higher = more volatile)
+
+# Analysis settings
+analysis:
+  top_k: 5                           # Analyze top K candidates
+
+# Execution modes
+simple_mode: false         # If true, rank only v0 essays (skip revision)
+seed: 42                   # Random seed for reproducibility
+
+# Output settings
+output_dir: "./runs"
+
+# OpenRouter API settings (can also use OPENROUTER_API_KEY env var)
+# api_key: "your-api-key-here"

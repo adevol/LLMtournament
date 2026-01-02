@@ -1,0 +1,30 @@
+# Fake LLM responses for testing and dry runs.
+# Used by FakeLLMClient in client.py.
+
+essay: |
+  A story about the future, written by {model}. The characters faced challenges
+  and overcame them through determination and creativity. The ending was
+  satisfying and thought-provoking.
+
+feedback: |
+  - Consider strengthening the opening hook
+  - The transition between sections could be smoother
+  - Some claims would benefit from more specific evidence
+  - The conclusion effectively synthesizes the main points
+  - Reviewer: {model}
+
+judgment:
+  reasons:
+    - Better narrative structure
+    - More compelling evidence
+    - Clearer prose style
+  winner_edge: "Essay {winner} demonstrated superior analytical depth."
+
+revision: |
+  ## Story
+  An improved story with a stronger opening hook. The characters faced
+  challenges and overcame them through determination. The narrative arc
+  was tightened based on feedback.
+  An enhanced scientific explanation with clearer methodology. Limitations
+  are explicitly acknowledged. Conclusions follow logically from the
+  evidence. Revised by {model}.
