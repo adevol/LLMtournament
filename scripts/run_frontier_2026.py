@@ -79,18 +79,18 @@ async def main() -> None:
         simple_mode=True,  # v0 only for speed
         seed=2026,
         token_caps={
-            "writer_tokens": 1200,
-            "critic_tokens": 200,
-            "revision_tokens": 1300,
-            "judge_tokens": 800,
+            "writer_tokens": 3500,
+            "critic_tokens": 1500,
+            "revision_tokens": 3500,
+            "judge_tokens": 2000,
         },
         ranking={
-            "rounds": 5,
+            "rounds": 5,  # optional, auto-calculated as ceil(log2(N)) + 1 for stable rankings
             "algorithm": "trueskill",
             "judging_method": judging_method,
             "audit_confidence_threshold": 0.7,
             "primary_judges": PRIMARY_JUDGES,
-            "sub_judges": SUB_JUDGES,
+            "sub_judges": SUB_JUDGES,  # optional, only needed for parallel_majority judging
         },
         api_key=api_key,
     )
