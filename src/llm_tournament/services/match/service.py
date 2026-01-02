@@ -107,8 +107,9 @@ class MatchService:
 
         if self.config.ranking.judging_method == "parallel_majority":
             primary = self.config.ranking.primary_judges or self.config.judges
+            count = self.config.ranking.primary_judge_count
             subs = self.config.ranking.sub_judges or [
-                j for j in self.config.judges if j not in primary[:3]
+                j for j in self.config.judges if j not in primary[:count]
             ]
             return await run_match_parallel_majority(
                 self.client,
@@ -121,6 +122,8 @@ class MatchService:
                 self.config.ranking.audit_confidence_threshold,
                 self.config.token_caps.judge_tokens,
                 self.config.temperatures.judge,
+                self.config.ranking.primary_judge_count,
+                self.config.ranking.sub_judge_count,
             )
 
         return await run_match_with_audit(

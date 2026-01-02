@@ -443,8 +443,10 @@ async def run_match_parallel_majority(
     confidence_threshold: float,
     max_tokens: int,
     temperature: float,
+    primary_judge_count: int = PRIMARY_JUDGE_COUNT,
+    sub_judge_count: int = SUB_JUDGE_COUNT,
 ) -> MatchResult:
-    """Run match with 3 parallel judges and majority voting.
+    """Run match with parallel judges and majority voting.
 
     Args:
         client: Async LLM client.
@@ -452,26 +454,28 @@ async def run_match_parallel_majority(
         essay_b: Essay B text.
         essay_a_id: Essay A identifier.
         essay_b_id: Essay B identifier.
-        primary_judges: List of primary judge models (uses first 3, rotates if more).
+        primary_judges: List of primary judge models.
         sub_judges: List of sub-judge models for low-confidence expansion.
         confidence_threshold: Below this, add sub-judges.
         max_tokens: Max tokens for responses.
         temperature: Sampling temperature.
+        primary_judge_count: How many primary judges to use (default 3).
+        sub_judge_count: How many sub-judges to add on low confidence (default 2).
 
     Returns:
         MatchResult with majority decision.
     """
     judges_to_use = (
-        primary_judges[:PRIMARY_JUDGE_COUNT]
-        if len(primary_judges) >= PRIMARY_JUDGE_COUNT
+        primary_judges[:primary_judge_count]
+        if len(primary_judges) >= primary_judge_count
         else primary_judges
     )
 
-    if len(judges_to_use) < PRIMARY_JUDGE_COUNT:
+    if len(judges_to_use) < primary_judge_count:
         logger.warning(
             "insufficient_primary_judges",
             have=len(judges_to_use),
-            need=PRIMARY_JUDGE_COUNT,
+            need=primary_judge_count,
         )
 
     # Run judges in parallel
@@ -509,8 +513,8 @@ async def run_match_parallel_majority(
         logger.info("expanding_with_sub_judges", threshold=confidence_threshold)
 
         sub_to_use = (
-            sub_judges[:SUB_JUDGE_COUNT]
-            if len(sub_judges) >= SUB_JUDGE_COUNT
+            sub_judges[:sub_judge_count]
+            if len(sub_judges) >= sub_judge_count
             else sub_judges
         )
         sub_tasks = [
