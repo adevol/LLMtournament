@@ -53,11 +53,27 @@ class Temperatures(BaseModel):
 
 
 class RankingConfig(BaseModel):
-    """Ranking algorithm configuration."""
+    """Ranking algorithm configuration.
+
+    Attributes:
+        algorithm: Rating algorithm ("elo" or "trueskill").
+        judging_method: How judges evaluate matches:
+            - "audit": Single primary judge, audits on low confidence.
+            - "parallel_majority": 3 judges in parallel, majority vote.
+        rounds: Number of Swiss tournament rounds.
+        audit_confidence_threshold: Confidence below which to trigger audit/expansion.
+        primary_judges: Judges for primary voting (parallel_majority uses first 3,
+            rotates if more). Defaults to main judges list.
+        sub_judges: Backup judges for low-confidence expansion (uses first 2,
+            rotates if more). Defaults to remaining judges.
+    """
 
     algorithm: Literal["elo", "trueskill"] = "elo"
+    judging_method: Literal["audit", "parallel_majority"] = "audit"
     rounds: int = 5
     audit_confidence_threshold: float = 0.7
+    primary_judges: list[str] | None = None
+    sub_judges: list[str] | None = None
     # Elo-specific
     initial_elo: float = 1500.0
     k_factor: float = 32.0
