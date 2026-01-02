@@ -58,6 +58,10 @@ async def main() -> None:
         writers=WRITERS,
         critics=CRITICS,
         judges=JUDGES,
+        # Topics designed to test nuanced reasoning:
+        # - Arguing against popular positions while steel-manning opponents
+        # - Understanding second-order economic effects
+        # - Avoiding both sycophantic agreement and contrarian overreach
         topics=[
             {
                 "title": "The Future of Work",
@@ -72,6 +76,41 @@ async def main() -> None:
                 "source_pack": (
                     "Key concepts: automation displacement, skills gap, universal "
                     "basic income, human-AI collaboration, labor market polarization."
+                ),
+            },
+            {
+                # Tests: Arguing against a popular ESG narrative while being fair
+                # to opposing views. Reveals if AI defaults to safe consensus.
+                "title": "ESG Investing Underperformance",
+                "prompts": {
+                    "Essay": (
+                        "Explain why ESG investing may systematically underperform "
+                        "traditional investing, while acknowledging the strongest "
+                        "arguments in favor of ESG. Be rigorous about economic "
+                        "mechanisms rather than ideological."
+                    ),
+                },
+                "source_pack": (
+                    "Key concepts: portfolio constraints, factor tilts, exclusion costs, "
+                    "greenwashing, fiduciary duty, stranded assets, risk-adjusted returns."
+                ),
+            },
+            {
+                # Tests: Understanding counterintuitive long-run effects in housing
+                # markets. Reveals if AI can reason about dynamic equilibria.
+                "title": "Short-Term Rental Bans",
+                "prompts": {
+                    "Essay": (
+                        "Argue why banning short-term rentals (like Airbnb) may hurt "
+                        "renters in the long run, even if rents fall initially. "
+                        "Address the strongest counterarguments about housing supply "
+                        "and neighborhood character."
+                    ),
+                },
+                "source_pack": (
+                    "Key concepts: housing supply elasticity, investment incentives, "
+                    "property rights, neighborhood effects, hotel industry competition, "
+                    "dynamic vs static analysis, unintended consequences."
                 ),
             },
         ],
