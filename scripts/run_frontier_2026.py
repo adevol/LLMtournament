@@ -14,7 +14,7 @@ from llm_tournament.services.llm import create_client
 load_dotenv()
 
 # Configuration flags
-MULTI_JUDGE = True  # Use multiple judges per match for higher reliability
+PARALLEL_MAJORITY = True  # Use 3-judge parallel voting (vs sequential audit mode)
 
 # 2026 frontier models
 WRITERS = [
@@ -26,9 +26,24 @@ WRITERS = [
     "deepseek/deepseek-v3.2",
 ]
 
-# Use same models for critics and judges
+# Use same models for critics
 CRITICS = WRITERS
-JUDGES = WRITERS
+
+# Primary judges (3 used in parallel for initial voting)
+PRIMARY_JUDGES = [
+    "openai/gpt-5-mini",
+    "google/gemini-3-flash-preview",
+    "deepseek/deepseek-v3.2",
+]
+
+# Sub-judges (2 added if confidence is low)
+SUB_JUDGES = [
+    "moonshotai/kimi-k2-thinking",
+    "z-ai/glm-4.7",
+]
+
+# All judges (for fallback/rotation in audit mode)
+JUDGES = PRIMARY_JUDGES + SUB_JUDGES
 
 
 async def main() -> None:
@@ -37,8 +52,7 @@ async def main() -> None:
     if not api_key:
         raise RuntimeError("Set OPENROUTER_API_KEY environment variable")
 
-    # Threshold of 1.0 forces audit (2nd judge) on every match
-    audit_threshold = 1.0 if MULTI_JUDGE else 0.7
+    judging_method = "parallel_majority" if PARALLEL_MAJORITY else "audit"
 
     config = TournamentConfig(
         writers=WRITERS,
@@ -68,12 +82,15 @@ async def main() -> None:
             "writer_tokens": 1200,
             "critic_tokens": 200,
             "revision_tokens": 1300,
-            "judge_tokens": 800,  # Increased to prevent truncation
+            "judge_tokens": 800,
         },
         ranking={
             "rounds": 5,
             "algorithm": "trueskill",
-            "audit_confidence_threshold": audit_threshold,
+            "judging_method": judging_method,
+            "audit_confidence_threshold": 0.7,
+            "primary_judges": PRIMARY_JUDGES,
+            "sub_judges": SUB_JUDGES,
         },
         api_key=api_key,
     )
