@@ -107,7 +107,7 @@ temperatures:
 
 ranking:
   algorithm: "elo" # or "trueskill"
-  rounds: 5
+  rounds: null     # Auto-calculated as ceil(log2(N)) + 1 if not set
   
   # Judging method: "audit" (sequential) or "parallel_majority" (3 judges)
   judging_method: "audit"
