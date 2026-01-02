@@ -7,6 +7,7 @@ Compare OpenRouter models by having them write essays, critique each other, revi
 - **Multi-stage pipeline**: Generation → Critique → Revision → Ranking
 - **High Performance**: Async core with parallel generation and judging
 - **Pluggable Ranking**: Choose between **Elo** (classic) or **TrueSkill** (Bayesian, faster convergence)
+- **Flexible Judging**: Audit mode (sequential) or parallel majority voting (3+2 judges)
 - **Unified Persistence**: DuckDB-backed storage for scalable analytics
 - **Dashboard Ready**: Native Parquet/JSON export for visualization
 - **Full essay comparison**: No summaries or judge cards
@@ -107,7 +108,16 @@ temperatures:
 ranking:
   algorithm: "elo" # or "trueskill"
   rounds: 5
+  
+  # Judging method: "audit" (sequential) or "parallel_majority" (3 judges)
+  judging_method: "audit"
   audit_confidence_threshold: 0.7
+  
+  # For parallel_majority: configure judge pools
+  primary_judges: null    # Defaults to judges list
+  sub_judges: null        # Defaults to remaining judges
+  primary_judge_count: 3  # How many primary judges
+  sub_judge_count: 2      # How many sub-judges on low confidence
   
   # Elo settings
   initial_elo: 1500
