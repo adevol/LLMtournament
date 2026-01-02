@@ -114,6 +114,10 @@ Handled by `MatchService` (`src/llm_tournament/services/match/service.py`).
     -   Candidates (Writer+Critic pairs) are sorted by their current Rating.
     -   The system pairs candidates with similar ratings who haven't played each other yet.
     -   This ensures fair matches and efficient ranking sorting.
+    -   **Rounds**: If not specified, auto-calculated as `ceil(log2(N)) + 1`:
+        - `log2(N)` rounds finds a clear winner
+        - `+1` extra round for ranking stability
+        - Minimum 3 rounds enforced
 
 2.  **Judging** (two modes available):
 
