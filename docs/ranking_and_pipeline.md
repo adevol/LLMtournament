@@ -114,16 +114,23 @@ Handled by `MatchService` (`src/llm_tournament/services/match/service.py`).
     -   Candidates (Writer+Critic pairs) are sorted by their current Rating.
     -   The system pairs candidates with similar ratings who haven't played each other yet.
     -   This ensures fair matches and efficient ranking sorting.
+    -   **Rounds**: If not specified, auto-calculated as `ceil(log2(N)) + 1`:
+        - `log2(N)` rounds finds a clear winner
+        - `+1` extra round for ranking stability
+        - Minimum 3 rounds enforced
 
-2.  **Judging**:
-    -   **Blind Test**: The `Judge` LLM receives two anonymous essays (A vs B).
-    -   **Criteria**: The judge evaluates based on narrative, evidence, and clarity.
+2.  **Judging** (two modes available):
+
+    **Audit Mode** (`judging_method: "audit"`):
+    -   **Blind Test**: A single `Judge` LLM receives two anonymous essays (A vs B).
     -   **Decision**: Returns a Winner (A/B) and a Confidence score (0.0-1.0).
+    -   **Audit**: If confidence is below threshold, additional judges vote.
 
-3.  **Auditing (Safety Net)**:
-    -   If the Primary Judge's confidence is below a configured threshold (e.g., 0.7), the **Audit System** triggers.
-    -   Two additional judges evaluate the match.
-    -   The final decision is a majority vote among the three judges.
+    **Parallel Majority Mode** (`judging_method: "parallel_majority"`):
+    -   **Parallel Voting**: N judges (default 3) evaluate simultaneously.
+    -   **Majority Vote**: Winner determined by majority.
+    -   **Expansion**: If average confidence < threshold, M sub-judges (default 2) are added for a 5-judge vote.
+    -   **Configurable**: `primary_judge_count`, `sub_judge_count`, `primary_judges`, `sub_judges`.
 
-4.  **Rating Update**:
+3.  **Rating Update**:
     -   The `RankingSystem` (Elo or TrueSkill) updates the ratings of both candidates based on the win/loss and the confidence of the decision.
