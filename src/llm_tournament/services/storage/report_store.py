@@ -6,27 +6,34 @@ import asyncio
 import csv
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+if TYPE_CHECKING:
+    from llm_tournament.services.storage.file_store import FileStore
 
 logger = structlog.get_logger()
 
 
-class ReportStoreMixin:
-    """Mixin for report generation and export."""
+class ReportStore:
+    """Report generation and export storage."""
 
-    base_dir: Path
+    def __init__(self, base_dir: Path, file_store: FileStore) -> None:
+        """Initialize report store.
 
-    def ranking_dir(self, topic_slug: str) -> Path:
-        """Get or create ranking directory (protocol for mixin compatibility)."""
-        raise NotImplementedError
+        Args:
+            base_dir: Base directory for aggregation reports.
+            file_store: FileStore instance for accessing ranking directories.
+        """
+        self.base_dir = base_dir
+        self._file_store = file_store
 
     async def save_report(self, topic_slug: str, filename: str, content: str) -> None:
         """Save a generic report file (Markdown/Text)."""
 
         def _save() -> None:
-            ranking_dir = self.ranking_dir(topic_slug)
+            ranking_dir = self._file_store.ranking_dir(topic_slug)
             path = ranking_dir / filename
             path.write_text(content, encoding="utf-8")
             logger.debug("saved_report", path=str(path))
@@ -39,7 +46,7 @@ class ReportStoreMixin:
         """Save leaderboard to text/csv files for human consumption."""
 
         def _save() -> None:
-            ranking_dir = self.ranking_dir(topic_slug)
+            ranking_dir = self._file_store.ranking_dir(topic_slug)
 
             md_path = ranking_dir / "leaderboard.md"
             with md_path.open("w", encoding="utf-8") as f:
@@ -89,7 +96,7 @@ class ReportStoreMixin:
         """Export leaderboard to JSON for dashboard consumption."""
 
         def _save() -> None:
-            ranking_dir = self.ranking_dir(topic_slug)
+            ranking_dir = self._file_store.ranking_dir(topic_slug)
             json_path = ranking_dir / "leaderboard.json"
             data = [
                 r.model_dump() if hasattr(r, "model_dump") else dict(r)
