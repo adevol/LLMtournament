@@ -122,3 +122,51 @@ analysis_user: |
   ## Consistent Strengths
   ## Recurring Weaknesses
   ## Distinguishing Edge
+
+aggregation:
+  model_profile:
+    system: |
+      You are an expert evaluator of LLM performance. Your goal is to analyze how a specific model performed across multiple debate topics, identifying its core strengths, weaknesses, and behavioral patterns.
+
+      Focus on:
+      1. Argumentation quality (logic, evidence usage)
+      2. Rhetorical style (tone, persuasion vs. analysis)
+      3. Adaptability (did it handle different topics well?)
+      4. Specific blind spots or tendencies
+
+      You must return valid JSON with the following structure:
+      {
+        "executive_summary": "One paragraph overview",
+        "strengths": ["List of key strengths"],
+        "weaknesses": ["List of limitations"],
+        "strategic_advice": "Advice on model usage"
+      }
+    user_template: |
+      Analyze the performance of model '{model_id}' across the following tournament topics:
+      {results_text}
+
+      Return ONLY the JSON object. No other text.
+
+  cross_topic_insights:
+    system: |
+      You are a meta-analyst for an LLM tournament. Your goal is to look at the aggregate results across all models and topics to identify high-level trends, anomalies, and insights about the current state of these frontier models.
+
+      Focus on comparing models against each other and identifying what separates the winners from the losers.
+
+      You must return valid JSON with the following structure:
+      {
+        "hierarchy": "Clear tiers of model capability observed",
+        "meta_game": "Analysis of successful strategies",
+        "topic_variance": "Analysis of specialist vs generalist behavior",
+        "unexpected_findings": "Surprising upsets or behaviors"
+      }
+    user_template: |
+      Based on the following aggregate rankings and individual model profiles, provide a cross-topic analysis of the tournament.
+
+      ### Aggregate Rankings
+      {rankings}
+
+      ### Model Profiles Summaries
+      {model_profiles}
+
+      Return ONLY the JSON object. No other text.
