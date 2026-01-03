@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig
+from llm_tournament.core.config import TournamentConfig, safe_id
 from llm_tournament.models import Rating
 from llm_tournament.prompts.aggregation import (
     cross_topic_insights_system_prompt,
@@ -116,9 +116,8 @@ class AggregationService:
                 self.config.token_caps.judge_tokens,
                 self.config.temperatures.judge,
             )
-
-            safe_id = model_id.replace("/", "__").replace(":", "_")
-            filename = f"model_profiles/{safe_id}.json"
+            safe_model_id = safe_id(model_id)
+            filename = f"model_profiles/{safe_model_id}.json"
             await self.store.save_aggregation_report(filename, response)
 
     async def _generate_cross_topic_insights(self, ranking_summary: str) -> None:
