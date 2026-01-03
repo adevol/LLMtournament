@@ -18,6 +18,17 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 
+def _normalize_reasons(reasons: Any) -> list[str]:
+    """Normalize reasons field to a list of strings."""
+    if isinstance(reasons, str):
+        return [reasons]
+    if reasons is None:
+        return []
+    if isinstance(reasons, list):
+        return [str(r) for r in reasons]
+    return [str(reasons)]
+
+
 class DBStoreMixin:
     """Mixin for SQLModel-based match and rating storage."""
 
@@ -38,6 +49,8 @@ class DBStoreMixin:
 
         if "topic_slug" not in data:
             data["topic_slug"] = topic_slug
+
+        data["reasons"] = _normalize_reasons(data.get("reasons"))
 
         def _save() -> None:
             with Session(self._engine) as session:
