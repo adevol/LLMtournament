@@ -173,6 +173,11 @@ def calculate_rounds(num_candidates: int) -> int:
     return max(min_rounds, math.ceil(math.log2(num_candidates)) + 1)
 
 
+def safe_id(value: str) -> str:
+    """Convert arbitrary ID to filesystem-safe slug."""
+    return value.replace("/", "__").replace(":", "_")
+
+
 def model_slug(model_id: str) -> str:
     """Convert model ID to filesystem-safe slug.
 
@@ -182,7 +187,7 @@ def model_slug(model_id: str) -> str:
     Returns:
         Filesystem-safe slug (e.g., 'openai__gpt-4-turbo').
     """
-    return model_id.replace("/", "__").replace(":", "_")
+    return safe_id(model_id)
 
 
 def hash_messages(messages: list[dict[str, Any]], params: dict[str, Any]) -> str:
