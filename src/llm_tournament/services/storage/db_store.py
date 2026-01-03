@@ -111,3 +111,18 @@ class DBStoreMixin:
                 return list(results)
 
         return await asyncio.to_thread(_get)
+
+    async def get_all_ratings(self) -> list[Any]:
+        """Get all ratings across all topics.
+
+        Returns:
+            List of Rating objects.
+        """
+
+        def _get() -> list[Any]:
+            with Session(self._engine) as session:
+                statement = select(Rating)
+                results = session.exec(statement).all()
+                return list(results)
+
+        return await asyncio.to_thread(_get)
