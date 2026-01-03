@@ -1,7 +1,21 @@
-"""Judge rotation and audit logic for LLM Tournament."""
+"""Judge rotation and match evaluation for LLM Tournament.
+
+This module provides two judging methods:
+
+1. **Audit mode** (`run_match_with_audit`):
+   - Single primary judge evaluates the match
+   - If confidence < threshold, a second judge is called
+   - On disagreement, a third tiebreaker judge decides
+
+2. **Parallel majority mode** (`run_match_parallel_majority`):
+   - 3 judges evaluate in parallel
+   - Winner determined by majority vote (2/3)
+   - If avg confidence < threshold, 2 sub-judges are added (5 total, 3/5 vote)
+"""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass, field
@@ -18,6 +32,10 @@ from llm_tournament.prompts import (
 from llm_tournament.services.llm import LLMClient
 
 logger = structlog.get_logger()
+
+# Constants for parallel majority voting
+PRIMARY_JUDGE_COUNT = 3
+SUB_JUDGE_COUNT = 2
 
 
 class JudgeResult(BaseModel):
@@ -411,4 +429,150 @@ async def run_match_with_audit(
         primary_judge=primary_judge,
         audit_judges=[second_judge, third_judge],
         final_decision="majority",
+    )
+
+
+async def run_match_parallel_majority(
+    client: LLMClient,
+    essay_a: str,
+    essay_b: str,
+    essay_a_id: str,
+    essay_b_id: str,
+    primary_judges: list[str],
+    sub_judges: list[str],
+    confidence_threshold: float,
+    max_tokens: int,
+    temperature: float,
+    primary_judge_count: int = PRIMARY_JUDGE_COUNT,
+    sub_judge_count: int = SUB_JUDGE_COUNT,
+) -> MatchResult:
+    """Run match with parallel judges and majority voting.
+
+    Args:
+        client: Async LLM client.
+        essay_a: Essay A text.
+        essay_b: Essay B text.
+        essay_a_id: Essay A identifier.
+        essay_b_id: Essay B identifier.
+        primary_judges: List of primary judge models.
+        sub_judges: List of sub-judge models for low-confidence expansion.
+        confidence_threshold: Below this, add sub-judges.
+        max_tokens: Max tokens for responses.
+        temperature: Sampling temperature.
+        primary_judge_count: How many primary judges to use (default 3).
+        sub_judge_count: How many sub-judges to add on low confidence (default 2).
+
+    Returns:
+        MatchResult with majority decision.
+    """
+    judges_to_use = (
+        primary_judges[:primary_judge_count]
+        if len(primary_judges) >= primary_judge_count
+        else primary_judges
+    )
+
+    if len(judges_to_use) < primary_judge_count:
+        logger.warning(
+            "insufficient_primary_judges",
+            have=len(judges_to_use),
+            need=primary_judge_count,
+        )
+
+    # Run judges in parallel
+    tasks = [
+        judge_match(
+            client,
+            essay_a,
+            essay_b,
+            essay_a_id,
+            essay_b_id,
+            judge,
+            max_tokens,
+            temperature,
+            None,
+        )
+        for judge in judges_to_use
+    ]
+    results: list[JudgeResult] = await asyncio.gather(*tasks)
+
+    # Majority vote
+    votes = [r.winner for r in results]
+    winner = "A" if votes.count("A") > votes.count("B") else "B"
+    avg_confidence = sum(r.confidence for r in results) / len(results)
+
+    logger.info(
+        "parallel_majority_vote",
+        judges=judges_to_use,
+        votes=votes,
+        winner=winner,
+        avg_confidence=avg_confidence,
+    )
+
+    # Check if we need sub-judges
+    if avg_confidence < confidence_threshold and sub_judges:
+        logger.info("expanding_with_sub_judges", threshold=confidence_threshold)
+
+        sub_to_use = (
+            sub_judges[:sub_judge_count]
+            if len(sub_judges) >= sub_judge_count
+            else sub_judges
+        )
+        sub_tasks = [
+            judge_match(
+                client,
+                essay_a,
+                essay_b,
+                essay_a_id,
+                essay_b_id,
+                judge,
+                max_tokens,
+                temperature,
+                None,
+            )
+            for judge in sub_to_use
+        ]
+        sub_results: list[JudgeResult] = await asyncio.gather(*sub_tasks)
+
+        # Combine all results (5 total)
+        all_results = results + sub_results
+        all_votes = [r.winner for r in all_results]
+        winner = "A" if all_votes.count("A") > all_votes.count("B") else "B"
+        avg_confidence = sum(r.confidence for r in all_results) / len(all_results)
+
+        logger.info(
+            "expanded_vote",
+            all_judges=judges_to_use + sub_to_use,
+            all_votes=all_votes,
+            winner=winner,
+            avg_confidence=avg_confidence,
+        )
+
+        all_judges = judges_to_use + sub_to_use
+        winning_result = next(r for r in all_results if r.winner == winner)
+
+        return MatchResult(
+            essay_a_id=essay_a_id,
+            essay_b_id=essay_b_id,
+            winner=winner,
+            confidence=avg_confidence,
+            reasons=winning_result.reasons,
+            winner_edge=winning_result.winner_edge,
+            primary_judge=all_judges[0],
+            audit_judges=all_judges[1:],
+            final_decision="parallel_majority_5",
+        )
+
+    # 3-judge result
+    winning_result = next(r for r in results if r.winner == winner)
+
+    return MatchResult(
+        essay_a_id=essay_a_id,
+        essay_b_id=essay_b_id,
+        winner=winner,
+        confidence=avg_confidence,
+        reasons=winning_result.reasons,
+        winner_edge=winning_result.winner_edge,
+        primary_judge=judges_to_use[0],
+        audit_judges=judges_to_use[1:],
+        final_decision="parallel_majority_3",
     )

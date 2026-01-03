@@ -12,6 +12,7 @@ from llm_tournament.services.match import (
     Candidate,
     JudgeRotation,
     MatchResult,
+    run_match_parallel_majority,
     run_match_with_audit,
     swiss_pairing,
 )
@@ -100,9 +101,30 @@ class MatchService:
         rotation: JudgeRotation,
         version: str,
     ) -> MatchResult:
-        """Load essays and run judged match."""
+        """Load essays and run judged match using configured method."""
         essay_a = await self.store.load_essay(topic_slug, candidate_a.id, version)
         essay_b = await self.store.load_essay(topic_slug, candidate_b.id, version)
+
+        if self.config.ranking.judging_method == "parallel_majority":
+            primary = self.config.ranking.primary_judges or self.config.judges
+            count = self.config.ranking.primary_judge_count
+            subs = self.config.ranking.sub_judges or [
+                j for j in self.config.judges if j not in primary[:count]
+            ]
+            return await run_match_parallel_majority(
+                self.client,
+                essay_a,
+                essay_b,
+                candidate_a.id,
+                candidate_b.id,
+                primary,
+                subs,
+                self.config.ranking.audit_confidence_threshold,
+                self.config.token_caps.judge_tokens,
+                self.config.temperatures.judge,
+                self.config.ranking.primary_judge_count,
+                self.config.ranking.sub_judge_count,
+            )
 
         return await run_match_with_audit(
             self.client,

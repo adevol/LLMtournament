@@ -6,7 +6,7 @@ import asyncio
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig, model_slug
+from llm_tournament.core.config import TournamentConfig, calculate_rounds, model_slug
 from llm_tournament.ranking import RankingSystem, create_ranking_system
 from llm_tournament.services.analysis import AnalysisService
 from llm_tournament.services.llm import LLMClient
@@ -129,11 +129,19 @@ class TournamentPipeline:
             )
             version = "v1"
 
+        # Auto-calculate rounds if not specified
+        rounds = self.config.ranking.rounds
+        if rounds is None:
+            rounds = calculate_rounds(len(candidates))
+            logger.info(
+                "auto_calculated_rounds", candidates=len(candidates), rounds=rounds
+            )
+
         ranking_system = create_ranking_system(self.config)
         ranking_system.initialize([c.id for c in candidates])
 
         rotation = JudgeRotation(self.judges)
-        for round_num in range(1, self.config.ranking.rounds + 1):
+        for round_num in range(1, rounds + 1):
             await self.match_service.run_ranking_round(
                 topic_slug, round_num, candidates, ranking_system, rotation, version
             )

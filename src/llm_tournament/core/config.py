@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -53,11 +54,30 @@ class Temperatures(BaseModel):
 
 
 class RankingConfig(BaseModel):
-    """Ranking algorithm configuration."""
+    """Ranking algorithm configuration.
+
+    Attributes:
+        algorithm: Rating algorithm ("elo" or "trueskill").
+        judging_method: How judges evaluate matches:
+            - "audit": Single primary judge, audits on low confidence.
+            - "parallel_majority": N judges in parallel, majority vote.
+        rounds: Number of Swiss tournament rounds. If None, auto-calculated as
+            ceil(log2(candidates)) + 1, which provides stable rankings.
+        audit_confidence_threshold: Confidence below which to trigger audit/expansion.
+        primary_judges: Judges for primary voting. Defaults to main judges list.
+        sub_judges: Backup judges for low-confidence expansion.
+        primary_judge_count: How many primary judges to use (default 3).
+        sub_judge_count: How many sub-judges to add on low confidence (default 2).
+    """
 
     algorithm: Literal["elo", "trueskill"] = "elo"
-    rounds: int = 5
+    judging_method: Literal["audit", "parallel_majority"] = "audit"
+    rounds: int | None = None  # Auto-calculated if None: ceil(log2(N)) + 1
     audit_confidence_threshold: float = 0.7
+    primary_judges: list[str] | None = None
+    sub_judges: list[str] | None = None
+    primary_judge_count: int = 3
+    sub_judge_count: int = 2
     # Elo-specific
     initial_elo: float = 1500.0
     k_factor: float = 32.0
@@ -132,6 +152,25 @@ def load_config(path: str | Path) -> TournamentConfig:
         data = yaml.safe_load(f)
 
     return TournamentConfig.model_validate(data)
+
+
+def calculate_rounds(num_candidates: int) -> int:
+    """Calculate recommended Swiss tournament rounds.
+
+    Uses ceil(log2(N)) + 1 heuristic to ensure stable rankings:
+    - log2(N) rounds needed to find a clear winner
+    - +1 extra round for ranking stability
+
+    Args:
+        num_candidates: Number of participants in the tournament.
+
+    Returns:
+        Recommended number of rounds (minimum 3).
+    """
+    if num_candidates <= 1:
+        return 1
+    min_rounds = 3
+    return max(min_rounds, math.ceil(math.log2(num_candidates)) + 1)
 
 
 def model_slug(model_id: str) -> str:
