@@ -1,4 +1,4 @@
-"""Unified tournament storage layer composing file and database mixins."""
+"""Unified tournament storage layer composing file and database stores."""
 
 from __future__ import annotations
 
@@ -12,20 +12,25 @@ from sqlmodel import SQLModel, create_engine
 
 from llm_tournament.core.config import TournamentConfig, get_git_hash
 
-from .db_store import DBStoreMixin
-from .file_store import FileStoreMixin
-from .report_store import ReportStoreMixin
+from .db_store import DBStore
+from .file_store import FileStore
+from .report_store import ReportStore
 
 logger = structlog.get_logger()
 
 
-class TournamentStore(FileStoreMixin, DBStoreMixin, ReportStoreMixin):
-    """Unified persistence layer combining file artifacts and SQLModel storage.
+class TournamentStore:
+    """Unified persistence layer composing file and database stores.
 
     Handles:
     - File-based storage for essays, feedback, revisions (Markdown)
     - SQLModel-based storage for matches, ratings (DuckDB/SQL)
     - JSONL backup files for matches
+
+    Attributes:
+        files: FileStore for essay/feedback/revision operations.
+        db: DBStore for match and rating operations.
+        reports: ReportStore for report generation and export.
     """
 
     def __init__(
@@ -46,6 +51,7 @@ class TournamentStore(FileStoreMixin, DBStoreMixin, ReportStoreMixin):
         self._engine = None
         self._init_directories()
         self._init_db()
+        self._init_stores()
         self._save_metadata()
 
     def _init_directories(self) -> None:
@@ -58,6 +64,12 @@ class TournamentStore(FileStoreMixin, DBStoreMixin, ReportStoreMixin):
         db_url = f"duckdb:///{self._db_path}"
         self._engine = create_engine(db_url)
         SQLModel.metadata.create_all(self._engine)
+
+    def _init_stores(self) -> None:
+        """Initialize composed storage components."""
+        self.files = FileStore(self.base_dir)
+        self.db = DBStore(self._engine, self.files, self.base_dir)
+        self.reports = ReportStore(self.base_dir, self.files)
 
     def _save_metadata(self) -> None:
         """Save config snapshot and run metadata."""
