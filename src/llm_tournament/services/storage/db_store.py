@@ -15,6 +15,8 @@ from llm_tournament.models import Match, Rating
 if TYPE_CHECKING:
     from sqlalchemy import Engine
 
+    from llm_tournament.services.storage.file_store import FileStore
+
 logger = structlog.get_logger()
 
 
@@ -29,15 +31,20 @@ def _normalize_reasons(reasons: Any) -> list[str]:
     return [str(reasons)]
 
 
-class DBStoreMixin:
-    """Mixin for SQLModel-based match and rating storage."""
+class DBStore:
+    """SQLModel-based match and rating storage."""
 
-    _engine: Engine
-    base_dir: Path
+    def __init__(self, engine: Engine, file_store: FileStore, base_dir: Path) -> None:
+        """Initialize database store.
 
-    def ranking_dir(self, topic_slug: str) -> Path:
-        """Get or create ranking directory (protocol for mixin compatibility)."""
-        raise NotImplementedError
+        Args:
+            engine: SQLAlchemy engine for database operations.
+            file_store: FileStore instance for accessing ranking directories.
+            base_dir: Base directory for JSONL backups.
+        """
+        self._engine = engine
+        self._file_store = file_store
+        self.base_dir = base_dir
 
     async def save_match(self, topic_slug: str, match_data: Any) -> None:
         """Save a match result to database and JSONL backup."""
@@ -58,7 +65,7 @@ class DBStoreMixin:
                 session.add(match)
                 session.commit()
 
-            ranking_dir = self.ranking_dir(topic_slug)
+            ranking_dir = self._file_store.ranking_dir(topic_slug)
             jsonl_path = ranking_dir / "matches.jsonl"
             with jsonl_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(data, default=str) + "\n")

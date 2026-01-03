@@ -172,10 +172,12 @@ class TournamentPipeline:
         )
 
         for rating_obj in rating_objects:
-            await self.store.save_rating(topic_slug, rating_obj)
+            await self.store.db.save_rating(topic_slug, rating_obj)
 
-        await self.store.save_ranking_output(topic_slug, rating_objects, ranking_system)
-        await self.store.export_to_json(topic_slug, rating_objects)
+        await self.store.reports.save_ranking_output(
+            topic_slug, rating_objects, ranking_system
+        )
+        await self.store.reports.export_to_json(topic_slug, rating_objects)
 
     async def _save_aggregates(
         self,
@@ -185,11 +187,15 @@ class TournamentPipeline:
     ) -> None:
         """Generate and save aggregate statistics."""
         writer_report = generate_writer_aggregate(candidates, ranking_system)
-        await self.store.save_report(topic_slug, "writer_aggregate.md", writer_report)
+        await self.store.reports.save_report(
+            topic_slug, "writer_aggregate.md", writer_report
+        )
 
         if not self.config.simple_mode:
             critic_report = generate_critic_metrics(candidates, ranking_system)
-            await self.store.save_report(topic_slug, "critic_metrics.md", critic_report)
+            await self.store.reports.save_report(
+                topic_slug, "critic_metrics.md", critic_report
+            )
 
 
 async def run_tournament(

@@ -63,12 +63,12 @@ class TestPipelineDryRun:
             await pipeline.run()
 
             # Check v0 essays were created
-            v0_dir = store.v0_dir("test-topic")
+            v0_dir = store.files.v0_dir("test-topic")
             assert (v0_dir / "test__writer-a.md").exists()
             assert (v0_dir / "test__writer-b.md").exists()
 
             # Check ranking outputs
-            ranking_dir = store.ranking_dir("test-topic")
+            ranking_dir = store.files.ranking_dir("test-topic")
             assert (ranking_dir / "leaderboard.csv").exists()
             assert (ranking_dir / "leaderboard.md").exists()
 
@@ -86,15 +86,15 @@ class TestPipelineDryRun:
             await pipeline.run()
 
             # Check v0 essays
-            v0_dir = store.v0_dir("test-topic")
+            v0_dir = store.files.v0_dir("test-topic")
             assert (v0_dir / "test__writer-a.md").exists()
 
             # Check feedback was created
-            feedback_dir = store.feedback_dir("test-topic")
+            feedback_dir = store.files.feedback_dir("test-topic")
             assert (feedback_dir / "test__writer-a__test__critic-a.md").exists()
 
             # Check v1 essays
-            v1_dir = store.v1_dir("test-topic")
+            v1_dir = store.files.v1_dir("test-topic")
             assert (v1_dir / "test__writer-a__test__critic-a.md").exists()
 
             await store.close()
@@ -110,7 +110,7 @@ class TestPipelineDryRun:
             await pipeline.run()
 
             # Only one writer should have essay
-            v0_dir = store.v0_dir("test-topic")
+            v0_dir = store.files.v0_dir("test-topic")
             essays = list(v0_dir.glob("*.md"))
             assert len(essays) == 1
 
@@ -138,7 +138,7 @@ class TestPipelineDryRun:
             pipeline = TournamentPipeline(minimal_config, client, store)
             await pipeline.run()
 
-            jsonl_path = store.ranking_dir("test-topic") / "matches.jsonl"
+            jsonl_path = store.files.ranking_dir("test-topic") / "matches.jsonl"
             assert jsonl_path.exists()
 
             # Check content is valid JSONL
@@ -188,7 +188,7 @@ class TestEssayContent:
             pipeline = TournamentPipeline(minimal_config, client, store)
             await pipeline.run()
 
-            essay = await store.load_essay("test-topic", "test__writer-a", "v0")
+            essay = await store.files.load_essay("test-topic", "test__writer-a", "v0")
             assert "## Essay" in essay
 
             await store.close()
@@ -209,12 +209,12 @@ class TestTrueSkillRanking:
             await pipeline.run()
 
             # Check ranking outputs exist
-            ranking_dir = store.ranking_dir("test-topic")
+            ranking_dir = store.files.ranking_dir("test-topic")
             assert (ranking_dir / "leaderboard.csv").exists()
             assert (ranking_dir / "leaderboard.md").exists()
 
             # Check leaderboard from DB
-            leaderboard = await store.get_leaderboard("test-topic")
+            leaderboard = await store.db.get_leaderboard("test-topic")
             assert len(leaderboard) > 0
 
             await store.close()

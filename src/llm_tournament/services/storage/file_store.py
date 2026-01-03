@@ -10,10 +10,16 @@ import structlog
 logger = structlog.get_logger()
 
 
-class FileStoreMixin:
-    """Mixin for file-based essay/feedback/revision storage."""
+class FileStore:
+    """File-based essay/feedback/revision storage."""
 
-    base_dir: Path
+    def __init__(self, base_dir: Path) -> None:
+        """Initialize file store.
+
+        Args:
+            base_dir: Base directory for all file storage.
+        """
+        self.base_dir = base_dir
 
     def topic_dir(self, topic_slug: str) -> Path:
         """Get or create topic directory."""
