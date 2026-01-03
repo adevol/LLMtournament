@@ -7,7 +7,7 @@ import json
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig
+from llm_tournament.core.config import TournamentConfig, safe_id
 from llm_tournament.models import Rating
 from llm_tournament.prompts import analysis_system_prompt, analysis_user_prompt
 from llm_tournament.services.llm import LLMClient
@@ -103,9 +103,10 @@ class AnalysisService:
                 self.config.token_caps.judge_tokens,
                 self.config.temperatures.judge,
             )
-
-            safe_id = essay_id.replace("/", "__").replace(":", "_")
-            await self.store.save_report(topic_slug, f"analysis_{safe_id}.md", analysis)
+            safe_essay_id = safe_id(essay_id)
+            await self.store.save_report(
+                topic_slug, f"analysis_{safe_essay_id}.md", analysis
+            )
 
     async def run_analysis(self, topic_slug: str) -> None:
         """Run post-ranking analysis for top candidates.

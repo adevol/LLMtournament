@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import random
 from abc import ABC, abstractmethod
@@ -21,6 +20,8 @@ from tenacity import (
     wait_exponential,
 )
 
+from llm_tournament.core.config import hash_messages
+
 logger = structlog.get_logger()
 
 _FAKE_RESPONSES_PATH = Path(__file__).parent / "fake_responses.yaml"
@@ -37,19 +38,6 @@ def _load_fake_responses() -> dict[str, Any]:
             _load_fake_responses._cache = yaml.safe_load(f)
     return _load_fake_responses._cache
 
-
-def _hash_messages(messages: list[dict[str, Any]], params: dict[str, Any]) -> str:
-    """Create deterministic hash for cache key.
-
-    Args:
-        messages: List of message dicts with role/content.
-        params: Additional parameters (model, temperature, etc.).
-
-    Returns:
-        SHA-256 hash as hex string.
-    """
-    content = json.dumps({"messages": messages, "params": params}, sort_keys=True)
-    return hashlib.sha256(content.encode()).hexdigest()
 
 
 class LLMClient(ABC):
@@ -289,7 +277,7 @@ class OpenRouterClient(LLMClient):
             Generated text content.
         """
         params = {"model": model, "max_tokens": max_tokens, "temperature": temperature}
-        cache_key = _hash_messages(messages, params)
+        cache_key = hash_messages(messages, params)
 
         # Check cache
         if self.use_cache and self.cache_db:
