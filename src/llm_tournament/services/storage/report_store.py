@@ -99,3 +99,18 @@ class ReportStoreMixin:
                 json.dump(data, f, indent=2, default=str)
 
         await asyncio.to_thread(_save)
+
+    async def save_aggregation_report(self, filename: str, content: str) -> None:
+        """Save a cross-topic aggregation report file."""
+
+        def _save() -> None:
+            output_dir = self.base_dir / "final_analysis"
+            output_dir.mkdir(exist_ok=True, parents=True)
+            path = output_dir / filename
+            output_dir_subdir = path.parent
+            output_dir_subdir.mkdir(exist_ok=True, parents=True)
+
+            path.write_text(content, encoding="utf-8")
+            logger.debug("saved_aggregation_report", path=str(path))
+
+        await asyncio.to_thread(_save)

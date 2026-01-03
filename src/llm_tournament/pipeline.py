@@ -8,6 +8,7 @@ import structlog
 
 from llm_tournament.core.config import TournamentConfig, calculate_rounds, model_slug
 from llm_tournament.ranking import RankingSystem, create_ranking_system
+from llm_tournament.services.aggregation import AggregationService
 from llm_tournament.services.analysis import AnalysisService
 from llm_tournament.services.llm import LLMClient
 from llm_tournament.services.match import (
@@ -74,6 +75,9 @@ class TournamentPipeline:
         )
         self.match_service = MatchService(config, client, store)
         self.analysis_service = AnalysisService(config, client, store, self._semaphore)
+        self.aggregation_service = AggregationService(
+            config, client, store, self._semaphore
+        )
 
     async def run(self) -> None:
         """Execute complete tournament pipeline."""
@@ -84,6 +88,10 @@ class TournamentPipeline:
         for topic in self.topics:
             logger.info("processing_topic", title=topic.title)
             await self._process_topic(topic.slug)
+
+        # Stage 6: Cross-Topic Aggregation
+        logger.info("stage_aggregation")
+        await self.aggregation_service.run_aggregation()
 
         logger.info("pipeline_complete")
 
