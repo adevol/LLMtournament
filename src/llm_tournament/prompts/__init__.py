@@ -1,6 +1,6 @@
 """Prompt templates for LLM Tournament.
 
-Loads prompts from 'prompts.yaml' in the same directory.
+Loads prompts from 'prompts.yaml' in the parent directory.
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ from llm_tournament.core.config import TopicConfig
 logger = structlog.get_logger()
 
 # Load prompts from single source of truth in package
-PROMPTS_PATH = Path(__file__).parent / "prompts.yaml"
+# Using parent.parent because this is now in prompts/__init__.py
+PROMPTS_PATH = Path(__file__).parent.parent / "prompts.yaml"
 
 
 def _load_prompts() -> dict[str, str]:
