@@ -1,12 +1,12 @@
 """Prompts for cross-topic aggregation analysis."""
 
-from llm_tournament.prompts import _PROMPTS
+from llm_tournament.prompts import get_prompt_group
 
 
 def _get_aggregation_prompts() -> dict[str, dict[str, str]]:
     """Safe getter for nested aggregation prompts."""
     # Ensure backward compatibility if prompts are missing or file reload is needed
-    return _PROMPTS.get("aggregation", {})
+    return get_prompt_group("aggregation")
 
 
 _AGG_PROMPTS = _get_aggregation_prompts()

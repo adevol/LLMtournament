@@ -6,6 +6,7 @@ Loads prompts from 'prompts.yaml' in the parent directory.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import structlog
 import yaml
@@ -32,6 +33,12 @@ def _load_prompts() -> dict[str, str]:
 
 # Load on import
 _PROMPTS = _load_prompts()
+
+
+def get_prompt_group(group: str) -> dict[str, Any]:
+    """Return a prompt group by name."""
+    value = _PROMPTS.get(group, {})
+    return value if isinstance(value, dict) else {}
 
 
 def writer_system_prompt() -> str:
