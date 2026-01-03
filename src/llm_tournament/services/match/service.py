@@ -102,8 +102,8 @@ class MatchService:
         version: str,
     ) -> MatchResult:
         """Load essays and run judged match using configured method."""
-        essay_a = await self.store.load_essay(topic_slug, candidate_a.id, version)
-        essay_b = await self.store.load_essay(topic_slug, candidate_b.id, version)
+        essay_a = await self.store.files.load_essay(topic_slug, candidate_a.id, version)
+        essay_b = await self.store.files.load_essay(topic_slug, candidate_b.id, version)
 
         if self.config.ranking.judging_method == "parallel_majority":
             primary = self.config.ranking.primary_judges or self.config.judges
@@ -177,4 +177,4 @@ class MatchService:
             final_decision=result.final_decision,
             timestamp=result.timestamp,
         )
-        await self.store.save_match(topic_slug, match_record)
+        await self.store.db.save_match(topic_slug, match_record)
