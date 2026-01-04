@@ -471,7 +471,12 @@ async def run_match_with_audit(
 
     Returns:
         Final MatchResult.
+
+    Raises:
+        ValueError: If no judges are available.
     """
+    if not rotation.judge_models:
+        raise ValueError("At least one judge is required for audit mode")
     context = MatchContext(
         essay_a_id=essay_a_id,
         essay_b_id=essay_b_id,
