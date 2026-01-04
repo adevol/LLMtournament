@@ -55,10 +55,10 @@ topics:
 
 # Token limits per role
 token_caps:
-  writer_tokens: 1200      # ~1000 tokens essay + buffer
-  critic_tokens: 200       # ~160 tokens feedback + buffer
-  revision_tokens: 1300    # ~1100 tokens revised essay + buffer
-  judge_tokens: 500        # JSON response + reasoning
+  writer_tokens: 2500      # ~2500 tokens essay + buffer
+  critic_tokens: 2500      # ~2500 tokens feedback + buffer
+  revision_tokens: 2500    # ~2500 tokens revised essay + buffer
+  judge_tokens: 2500        # JSON response + reasoning
 
 # Temperature settings per role
 temperatures:
@@ -85,5 +85,5 @@ seed: 42                   # Random seed for reproducibility
 # Output settings
 output_dir: "./runs"
 
-# OpenRouter API settings (can also use OPENROUTER_API_KEY env var)
+# OpenRouter API settings (can also use OPENROUTER_API_KEY env var, which is recommended)
 # api_key: "your-api-key-here"
