@@ -478,7 +478,7 @@ async def run_match_with_audit(
         Final MatchResult.
 
     Raises:
-        ValueError: If no judges are available.
+        ValueError: If no judges are available or the audit threshold is missing.
     """
     if not rotation.judge_models:
         raise ValueError("At least one judge is required for audit mode")
@@ -507,11 +507,9 @@ async def run_match_with_audit(
         confidence=primary_result.confidence,
     )
 
-    threshold = (
-        context.audit_threshold
-        if context.audit_threshold is not None
-        else audit_threshold
-    )
+    threshold = context.audit_threshold
+    if threshold is None:
+        raise ValueError("audit_threshold must be set on MatchContext")
     if primary_result.confidence >= threshold:
         return _build_match_result(
             context,
@@ -644,6 +642,9 @@ async def run_match_parallel_majority(
 
     Returns:
         MatchResult with majority decision.
+
+    Raises:
+        ValueError: If the audit threshold is missing.
     """
     context = MatchContext(
         essay_a_id=essay_a_id,
@@ -688,11 +689,9 @@ async def run_match_parallel_majority(
     )
 
     # Check if we need sub-judges
-    threshold = (
-        context.audit_threshold
-        if context.audit_threshold is not None
-        else confidence_threshold
-    )
+    threshold = context.audit_threshold
+    if threshold is None:
+        raise ValueError("audit_threshold must be set on MatchContext")
     if avg_confidence < threshold and sub_judges:
         logger.info("expanding_with_sub_judges", threshold=threshold)
 
