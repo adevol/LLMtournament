@@ -168,27 +168,7 @@ See [`config.yaml`](config.yaml) for a complete example. Key settings include:
 
 ## Output Structure
 
-`
-runs/{run_id}/
-+-- tournament.duckdb            # Full structured data (matches, ratings)
-+-- {topic_slug}/
-�   +-- v0/                      # Initial essays
-�   �   +-- {writer_slug}.md
-�   +-- feedback/                # Critic feedback
-�   �   +-- {writer_slug}__{critic_slug}.md
-�   +-- v1/                      # Revised essays
-�   �   +-- {writer_slug}__{critic_slug}.md
-�   +-- ranking/
-�       +-- matches.jsonl        # Match log (backup)
-�       +-- leaderboard.csv
-�       +-- leaderboard.md
-�       +-- leaderboard.json     # Structured rankings
-�       +-- writer_aggregate.md
-�       +-- critic_metrics.md
-�       +-- analysis_{entity}.md # Strength/weakness analysis
-+-- config_snapshot.yaml
-+-- run_metadata.json
-``
+```
 runs/{run_id}/
 ├── tournament.duckdb            # Full structured data (matches, ratings)
 ├── {topic_slug}/
@@ -267,3 +247,6 @@ src/llm_tournament/
 ## License
 
 MIT
+
+## Sources:
+https://arxiv.org/html/2504.14858v3?ref=yonglun.me
