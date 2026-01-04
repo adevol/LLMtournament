@@ -335,7 +335,12 @@ def _summarize_votes(
 
     Returns:
         Tuple of (votes, winner, avg_confidence, winning_result).
+
+    Raises:
+        ValueError: If no results are provided.
     """
+    if not results:
+        raise ValueError("At least one judge result is required")
     votes = [r.winner for r in results]
     winner = "A" if votes.count("A") > votes.count("B") else "B"
     avg_confidence = _average_confidence(results)
