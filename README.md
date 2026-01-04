@@ -1,5 +1,39 @@
 # LLM Tournament Evaluator
 
+A flexible framework for finding the best LLM for *your* specific use case through head-to-head auditable scoring and efficient tournament-style ranking.
+
+## Why This Tool Exists
+
+Choosing the "best" LLM for writing is surprisingly hard. Public leaderboards disagree:
+
+- [LLM Arena](https://llm-stats.com/arenas/llm-arena/chat-arena) (crowdsourced voting) shows Gemini 2.5 Flash leading
+- [Chatbot Arena](https://lmarena.ai/leaderboard/text) ranks Claude and GPT models at the top
+- [Expert reviews](https://intellectualead.com/best-llm-writing/) favor different models for creative vs. technical writing
+
+**Why the disagreement?** Because there is no single "best" model. Performance depends heavily on your specific domain, writing style, and quality criteria. A model that excels at marketing copy may struggle with technical documentation. One that produces engaging fiction might generate unnatural-sounding business emails.
+
+### The Real-World Problem
+
+When building chatbots and writing assistants for clients across various domains, selecting the right model at the right cost is a critical decision. Manual A/B testing is time-consuming, subjective, and doesn't scale. You need:
+
+1. **Auditable comparisons** - See exactly why one model beat another
+2. **Domain-specific evaluation** - Test with *your* prompts and content types
+3. **Cost efficiency** - Don't waste API credits on exhaustive round-robin comparisons
+
+### The Solution: Tournament-Style Ranking
+
+This tool automates model selection through **Swiss-system tournaments** with Elo or TrueSkill ratings. Instead of comparing every model against every other model (which scales O(n^2)), it uses smart pairing to find the best models in just O(n log n) comparisons.
+
+## How Elo Rating Works
+
+Elo is a rating system originally designed for chess that efficiently ranks players without requiring everyone to play everyone else. Here's how it finds the best among millions:
+
+**The Core Idea**: Each player (or LLM) has a numeric rating. When two compete, the winner gains points and the loser loses points. Crucially, the *amount* exchanged depends on the expected outcome - upsets cause large swings, expected wins cause small ones.
+
+**Why It's Efficient**: After just a few games, ratings converge to reflect true skill. A world champion doesn't need to play millions of amateurs - a few games against other top players establishes their rating. Similarly, this tool identifies top LLMs in ~20-30 matches rather than hundreds.
+
+---
+
 Compare OpenRouter models by having them write essays, critique each other, revise, and compete via pairwise tournament ranking with Elo or TrueSkill.
 
 ## Features
@@ -52,85 +86,17 @@ uv run pytest
 uv run pytest --cov=llm_tournament
 ```
 
-## Dashboard
-
-A Vue 3 + TypeScript dashboard is included for exploring results visually:
-
-```bash
-cd dashboard
-npm install
-npm run dev
-```
-
-Open http://localhost:5173, then drag and drop your run folder (or `tournament.duckdb` file) to explore:
-- **Leaderboard**: Sortable table with Elo/TrueSkill rankings
-- **Matches**: Browse judge decisions and reasoning
-- **Essays**: Side-by-side essay comparison with markdown rendering
 
 
 ## Configuration
 
-See `config.yaml` for a complete example. Key settings:
+See [`config.yaml`](config.yaml) for a complete example. Key settings include:
 
-```yaml
-writers:
-  - openai/gpt-4-turbo
-  - anthropic/claude-3-opus
-  # ... at least 5 models
-
-critics:
-  - openai/gpt-4-turbo
-  - anthropic/claude-3-sonnet
-  # ... at least 5 models
-
-judges:
-  - openai/gpt-4-turbo
-  - anthropic/claude-3-opus
-  # ... at least 5 models
-
-topics:
-  - title: "Climate Change"
-    prompts:
-      Essay: "Write a comprehensive essay exploring..."
-    source_pack: "Optional reference material..."
-
-token_caps:
-  writer_tokens: 1200
-  critic_tokens: 200
-  revision_tokens: 1300
-  judge_tokens: 500
-
-temperatures:
-  writer: 0.7
-  critic: 0.3
-  judge: 0.2
-
-ranking:
-  algorithm: "elo" # or "trueskill"
-  rounds: null     # Auto-calculated as ceil(log2(N)) + 1 if not set
-  
-  # Judging method: "audit" (sequential) or "parallel_majority" (3 judges)
-  judging_method: "audit"
-  audit_confidence_threshold: 0.7
-  
-  # For parallel_majority: configure judge pools
-  primary_judges: null    # Defaults to judges list
-  sub_judges: null        # Defaults to remaining judges
-  primary_judge_count: 3  # How many primary judges
-  sub_judge_count: 2      # How many sub-judges on low confidence
-  
-  # Elo settings
-  initial_elo: 1500
-  k_factor: 32
-  
-  # TrueSkill settings
-  initial_mu: 25.0
-  initial_sigma: 8.33
-
-simple_mode: false
-seed: 42
-output_dir: "./runs"
-```
+- **writers/critics/judges** - Lists of OpenRouter model IDs to compare
+- **topics** - Prompts and optional source material for essay generation
+- **ranking** - Algorithm choice (Elo or TrueSkill), judging method, rounds
+- **token_caps** - Per-role token limits for cost control
+- **temperatures** - Sampling temperatures for each role
 
 ## Output Structure
 
@@ -148,7 +114,7 @@ runs/{run_id}/
 │   │   ├── matches.jsonl        # Match log (backup)
 │   │   ├── leaderboard.csv
 │   │   ├── leaderboard.md
-│   │   ├── leaderboard.json     # For dashboard
+│   │   ├── leaderboard.json     # Structured rankings
 │   │   ├── writer_aggregate.md
 │   │   ├── critic_metrics.md
 │   │   └── analysis_{entity}.md # Strength/weakness analysis
@@ -160,25 +126,18 @@ runs/{run_id}/
 
 ```mermaid
 graph TD
-    Dashboard[Vue Dashboard] --> API[API Layer]
-    API --> S_Sub
-    API --> S_Match
-
-    CLI[CLI Tool] --> S_Sub
-    CLI --> S_Match
-
-    subgraph Services
-        S_Sub[SubmissionService]
-        S_Match[MatchService]
-    end
+    CLI[CLI Tool] --> Pipeline[Pipeline]
+    Pipeline --> S_Sub[SubmissionService]
+    Pipeline --> S_Match[MatchService]
+    Pipeline --> S_Agg[AggregationService]
 
     S_Sub --> LLM[LLMClient]
     S_Match --> LLM
+    S_Agg --> LLM
 
     S_Sub --> Store[TournamentStore]
     S_Match --> Store
-    Store --> DB[(SQLModel/DuckDB)]
-
+    Store --> DB[(DuckDB)]
 ```
 
 For a detailed explanation of the architecture, see [docs/architecture.md](docs/architecture.md).
@@ -187,15 +146,19 @@ For a detailed explanation of the architecture, see [docs/architecture.md](docs/
 
 ```text
 src/llm_tournament/
-├── api/                # FastAPI application
-├── core/               # Configuration & Shared Utils
-├── models/             # SQLModel Database Entities
-├── services/           # Business Logic
-│   ├── llm/            # LLM Client
-│   ├── match/          # Pairing & Judging
-│   └── submission/     # Generation & Revision
-├── ranking/            # Elo/TrueSkill Algorithms
-└── main.py             # Entry point
+├── cli.py              # CLI entry point
+├── pipeline.py         # Orchestration logic
+├── core/               # Configuration & shared utilities
+├── models/             # SQLModel database entities
+├── prompts/            # Prompt templates
+├── ranking/            # Elo/TrueSkill algorithms
+└── services/           # Business logic
+    ├── llm/            # LLM client (OpenRouter)
+    ├── match/          # Pairing & judging
+    ├── storage/        # DuckDB persistence
+    ├── submission.py   # Essay generation & revision
+    ├── analysis.py     # Per-model analysis
+    └── aggregation.py  # Cross-model insights
 ```
 
 ## License
