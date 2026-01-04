@@ -56,11 +56,9 @@ class MyRanking:  # No inheritance needed (duck typing)
 
 ---
 
-## Internal Data Pipeline
+## Pipeline Stages
 
-The tournament execution follows a strict pipeline designed to mimic a human editorial and competitive process.
-
-### Pipeline Stages
+The tournament execution follows a strict pipeline designed to mimic a human editorial and competitive process. The pipeline is orchestrated by `pipeline.py`.
 
 ```mermaid
 graph TD
