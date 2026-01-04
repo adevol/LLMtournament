@@ -1,6 +1,6 @@
 # LLM Tournament Evaluator
 
-A flexible, auditable framework for identifying **the best LLM for your specific use case** using head-to-head evaluation and efficient tournament-style ranking.
+A flexible, auditable framework for identifying **the best LLM for your specific use case** by running head-to-head evaluations of OpenRouter-hosted models with efficient tournament-style ranking.
 
 Built for real production systems where global benchmarks fail and decisions must be defensible, reproducible, and cost-aware.
 
@@ -106,11 +106,17 @@ For a deeper dive, see [docs/why_tournaments.md](docs/why_tournaments.md).
 
 ---
 
+## Prerequisites
+
+- Python 3.11+
+- uv installed
+- OpenRouter API key set as OPENROUTER_API_KEY (required for real runs; --dry-run does not require it)
+
 ## Installation
 
 ```bash
-git clone <repo-url>
-cd llm-tournament
+git clone https://github.com/adevol/LLMtournament.git
+cd llmtournament
 uv sync
 
 # Dev dependencies
@@ -155,7 +161,27 @@ See [`config.yaml`](config.yaml) for a complete example. Key settings include:
 
 ## Output Structure
 
-```
+`
+runs/{run_id}/
++-- tournament.duckdb            # Full structured data (matches, ratings)
++-- {topic_slug}/
+¦   +-- v0/                      # Initial essays
+¦   ¦   +-- {writer_slug}.md
+¦   +-- feedback/                # Critic feedback
+¦   ¦   +-- {writer_slug}__{critic_slug}.md
+¦   +-- v1/                      # Revised essays
+¦   ¦   +-- {writer_slug}__{critic_slug}.md
+¦   +-- ranking/
+¦       +-- matches.jsonl        # Match log (backup)
+¦       +-- leaderboard.csv
+¦       +-- leaderboard.md
+¦       +-- leaderboard.json     # Structured rankings
+¦       +-- writer_aggregate.md
+¦       +-- critic_metrics.md
+¦       +-- analysis_{entity}.md # Strength/weakness analysis
++-- config_snapshot.yaml
++-- run_metadata.json
+``
 runs/{run_id}/
 â”œâ”€â”€ tournament.duckdb            # Full structured data (matches, ratings)
 â”œâ”€â”€ {topic_slug}/
@@ -199,7 +225,22 @@ For a detailed explanation, see [docs/architecture.md](docs/architecture.md).
 
 ### Directory Structure
 
-```text
+`
+src/llm_tournament/
++-- cli.py              # CLI entry point
++-- pipeline.py         # Orchestration logic
++-- core/               # Configuration & shared utilities
++-- models/             # SQLModel database entities
++-- prompts/            # Prompt templates
++-- ranking/            # Elo/TrueSkill algorithms
++-- services/           # Business logic
+    +-- llm/            # LLM client (OpenRouter)
+    +-- match/          # Pairing & judging
+    +-- storage/        # DuckDB persistence
+    +-- submission.py   # Essay generation & revision
+    +-- analysis.py     # Per-model analysis
+    +-- aggregation.py  # Cross-model insights
+``text
 src/llm_tournament/
 â”œâ”€â”€ cli.py              # CLI entry point
 â”œâ”€â”€ pipeline.py         # Orchestration logic
