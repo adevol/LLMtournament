@@ -3,12 +3,13 @@
 Public LLM leaderboards are useful **as marketing signals**, not as decision tools for real-world systems.
 
 If you are building:
-- Retrieval-Augmented Generation (RAG) pipelines
-- Domain-specific assistants (legal, finance, engineering, medical)
-- Client-facing writing tools with quality guarantees
-- Cost-constrained production systems
+- Scientific or technical writing tools
+- Marketing and copywriting assistants
+- Legal, finance, or compliance workflows
+- Creative writing or editorial systems
+- Domain-specific chatbots or RAG pipelines
 
-...then global rankings are, at best, **weak priors** — and at worst, actively misleading.
+...then global rankings are, at best, **weak priors** - and at worst, actively misleading.
 
 This document explains why.
 
@@ -37,29 +38,28 @@ They are **not** optimized to answer:
 
 ---
 
-## Why This Breaks Down for RAG
+## Why This Breaks Down for Specific Domains
 
-RAG systems are where leaderboards fail hardest.
+Every niche has its own requirements that generic benchmarks ignore. Whether you're working on a specific content type or building a RAG pipeline over domain documents, the same problem applies: **leaderboards measure the wrong thing**.
 
-In real deployments, RAG performance depends on:
+**Scientific writing** needs precision, proper citation handling, and resistance to hallucination.
 
-- Faithfulness to retrieved context  
-- Resistance to hallucination under partial recall  
-- Ability to summarize, compare, or transform *domain-specific* documents  
-- Sensitivity to prompt structure and citation rules  
-- Output consistency across repeated runs  
-- Token efficiency at scale  
+**Marketing copy** needs brand voice consistency, persuasive flow, and audience awareness.
 
-None of this is captured by general chat benchmarks.
+**Legal and compliance** needs exact terminology, conservative claims, and source fidelity.
 
-Two models with near-identical leaderboard scores can behave **radically differently** once you introduce:
-- Long retrieved chunks
-- Tables, formulas, or technical language
-- Forced grounding to sources
-- Client-specific tone or compliance rules
+**Creative writing** needs stylistic range, narrative coherence, and tonal control.
+
+**RAG pipelines** need faithfulness to retrieved context, handling of long documents, and grounding to sources.
+
+Two models with near-identical leaderboard scores can perform **radically differently** once you introduce:
+- Your specific domain vocabulary
+- Your document structures (tables, formulas, citations)
+- Your prompt conventions
+- Your quality criteria
 
 In practice, teams repeatedly discover that:
-> The "#1 model" globally is *not* the best model for their RAG pipeline.
+> The "#1 model" globally is *not* the best model for their specific use case.
 
 ---
 

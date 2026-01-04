@@ -1,62 +1,119 @@
 # LLM Tournament Evaluator
 
-A flexible framework for finding the best LLM for *your* specific use case through head-to-head auditable scoring and efficient tournament-style ranking.
+A flexible, auditable framework for identifying **the best LLM for your specific use case** using head-to-head evaluation and efficient tournament-style ranking.
 
-## Why This Tool Exists
-
-Choosing the "best" LLM for writing is surprisingly hard. Public leaderboards disagree:
-
-- [LLM Arena](https://llm-stats.com/arenas/llm-arena/chat-arena) (crowdsourced voting) shows Gemini 2.5 Flash leading
-- [Chatbot Arena](https://lmarena.ai/leaderboard/text) ranks Claude and GPT models at the top
-- [Expert reviews](https://intellectualead.com/best-llm-writing/) favor different models for creative vs. technical writing
-
-**Why the disagreement?** Because there is no single "best" model. Performance depends heavily on your specific domain, writing style, and quality criteria. A model that excels at marketing copy may struggle with technical documentation. One that produces engaging fiction might generate unnatural-sounding business emails.
-
-### The Real-World Problem
-
-When building chatbots and writing assistants for clients across various domains, selecting the right model at the right cost is a critical decision. Manual A/B testing is time-consuming, subjective, and doesn't scale. You need:
-
-1. **Auditable comparisons** - See exactly why one model beat another
-2. **Domain-specific evaluation** - Test with *your* prompts and content types
-3. **Cost efficiency** - Don't waste API credits on exhaustive round-robin comparisons
-
-### The Solution: Tournament-Style Ranking
-
-This tool automates model selection through **Swiss-system tournaments** with Elo or TrueSkill ratings. Instead of comparing every model against every other model (which scales O(n^2)), it uses smart pairing to find the best models in just O(n log n) comparisons.
-
-## How Elo Rating Works
-
-Elo is a rating system originally designed for chess that efficiently ranks players without requiring everyone to play everyone else. Here's how it finds the best among millions:
-
-**The Core Idea**: Each player (or LLM) has a numeric rating. When two compete, the winner gains points and the loser loses points. Crucially, the *amount* exchanged depends on the expected outcome - upsets cause large swings, expected wins cause small ones.
-
-**Why It's Efficient**: After just a few games, ratings converge to reflect true skill. A world champion doesn't need to play millions of amateurs - a few games against other top players establishes their rating. Similarly, this tool identifies top LLMs in ~20-30 matches rather than hundreds.
+Built for real production systems where global benchmarks fail and decisions must be defensible, reproducible, and cost-aware.
 
 ---
 
-Compare OpenRouter models by having them write essays, critique each other, revise, and compete via pairwise tournament ranking with Elo or TrueSkill.
+## Why This Tool Exists
+
+There is no single "best" LLM.
+
+Public leaderboards regularly disagree:
+
+- [LLM Arena](https://llm-stats.com/arenas/llm-arena/chat-arena) (crowdsourced voting) shows Gemini models leading
+- [Chatbot Arena](https://lmarena.ai/leaderboard/text) ranks Claude and GPT models at the top
+- [Expert reviews](https://intellectualead.com/best-llm-writing/) favor different models for creative vs. technical writing
+
+**Why the disagreement?** They measure **generic chat performance**, not how models behave in *your* domain, with *your* prompts, documents, constraints, and budget.
+
+Whether you're building for a specific content niche or a RAG pipeline over domain documents, the same problem applies.
+
+This becomes painfully obvious when building:
+
+- Scientific or technical writing tools
+- Marketing and copywriting assistants
+- Legal, finance, or compliance workflows
+- Creative writing or editorial systems
+- RAG pipelines with domain-specific documents
+
+A model that tops a leaderboard may:
+- Produce unnatural prose in your specific style
+- Handle technical terminology poorly
+- Be brittle to your prompt structures
+- Be too expensive at scale
+
+Static benchmarks won't tell you that. Only evaluation on *your* content will.
+
+---
+
+## Why Manual A/B Testing Fails
+
+The usual approach - manually testing a few prompts - doesn't scale.
+
+It is:
+- **Subjective**: different reviewers, different conclusions
+- **Non-auditable**: hard to justify later
+- **Non-reproducible**: results drift
+- **Cost-inefficient**: explodes to O(n^2) comparisons
+
+You end up with opinions, not evidence.
+
+---
+
+## The Solution: Tournament-Style Evaluation
+
+Instead of asking *"Which model is best overall?"*, this framework asks:
+
+> **Which model consistently wins head-to-head on *my tasks*, under *my constraints*?**
+
+### How it works
+
+Models compete in structured tournaments:
+
+1. **Generation**: writers produce essays or responses
+2. **Critique**: critics provide structured feedback
+3. **Revision**: writers improve based on critiques
+4. **Judging**: outputs are compared pairwise
+5. **Ranking**: ratings update via Elo or TrueSkill
+
+Rather than exhaustive round-robins, the system uses **Swiss-style pairing**, reducing comparisons from O(n^2) to O(n log n) while converging reliably on top performers.
+
+### How Elo makes this efficient
+
+Elo is a rating system designed for chess that finds the best players among millions without requiring everyone to play everyone else.
+
+Each model has a numeric rating. When two compete, the winner gains points and the loser loses points. Crucially, the *amount* exchanged depends on the expected outcome - upsets cause large swings, expected wins cause small ones.
+
+After just a few matches, ratings converge to reflect true skill. A world champion doesn't need to play millions of amateurs - a few games against other top players establishes their rating. Similarly, this tool identifies top LLMs in ~20-30 matches rather than hundreds.
+
+### Why this beats static benchmarks
+
+1. **Domain-specific by design**: Evaluate on your prompts, your documents, your scoring criteria - not someone else's benchmark.
+
+2. **Fully auditable**: Every decision is backed by stored outputs, explicit comparisons, match logs, and rating trajectories. You can explain *why* a model won.
+
+3. **Cost-efficient at scale**: Tournament pairing minimizes API calls and wasted comparisons.
+
+4. **Robust to noise**: Rankings emerge from many structured comparisons. One lucky output doesn't dominate; one bad judge doesn't break results.
+
+For a deeper dive, see [docs/why_tournaments.md](docs/why_tournaments.md).
+
+---
 
 ## Features
 
-- **Multi-stage pipeline**: Generation → Critique → Revision → Ranking
-- **High Performance**: Async core with parallel generation and judging
-- **Pluggable Ranking**: Choose between **Elo** (classic) or **TrueSkill** (Bayesian, faster convergence)
-- **Flexible Judging**: Audit mode (sequential) or parallel majority voting (3+2 judges)
-- **Unified Persistence**: DuckDB-backed storage for scalable analytics
-- **Dashboard Ready**: Native Parquet/JSON export for visualization
-- **Full essay comparison**: No summaries or judge cards
-- **Deterministic execution**: Seedable RNG, stable artifact naming
-- **Cost control**: Token caps per role, dry-run mode, concurrency limits
+- **Multi-stage pipeline**: Generation -> Critique -> Revision -> Ranking
+- **Async and performant**: Parallel generation and judging
+- **Pluggable ranking**: Elo (simple, interpretable) or TrueSkill (Bayesian)
+- **Flexible judging**: Sequential audit mode or parallel majority voting
+- **Cost control**: Token caps, dry-run mode, concurrency limits
+- **Deterministic runs**: Seedable RNG, stable artifact naming
+- **Unified persistence**: DuckDB-backed storage
+- **Analytics-ready output**: Parquet/JSON exports
+- **Full output comparison**: No summaries or judge cards
+
+---
 
 ## Installation
 
 ```bash
-# Clone and install
 git clone <repo-url>
 cd llm-tournament
 uv sync
 
-# Install dev dependencies
+# Dev dependencies
 uv sync --extra dev
 ```
 
@@ -86,17 +143,15 @@ uv run pytest
 uv run pytest --cov=llm_tournament
 ```
 
-
-
 ## Configuration
 
 See [`config.yaml`](config.yaml) for a complete example. Key settings include:
 
-- **writers/critics/judges** - Lists of OpenRouter model IDs to compare
-- **topics** - Prompts and optional source material for essay generation
-- **ranking** - Algorithm choice (Elo or TrueSkill), judging method, rounds
-- **token_caps** - Per-role token limits for cost control
-- **temperatures** - Sampling temperatures for each role
+- **writers/critics/judges**: Lists of OpenRouter model IDs to compare
+- **topics**: Prompts and optional source material for essay generation
+- **ranking**: Algorithm choice (Elo or TrueSkill), judging method, rounds
+- **token_caps**: Per-role token limits for cost control
+- **temperatures**: Sampling temperatures for each role
 
 ## Output Structure
 
@@ -140,7 +195,7 @@ graph TD
     Store --> DB[(DuckDB)]
 ```
 
-For a detailed explanation of the architecture, see [docs/architecture.md](docs/architecture.md).
+For a detailed explanation, see [docs/architecture.md](docs/architecture.md).
 
 ### Directory Structure
 
