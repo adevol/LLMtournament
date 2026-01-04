@@ -8,13 +8,17 @@ Built for real production systems where global benchmarks fail and decisions mus
 
 ## Why This Tool Exists
 
-There is no single "best" LLM.
+There is no single "best" LLM for text writing.
 
-Public leaderboards regularly disagree:
+Public leaderboards (and personal experience) regularly disagree:
 
-- [LLM Arena](https://llm-stats.com/arenas/llm-arena/chat-arena) (crowdsourced voting) shows Gemini models leading
-- [Chatbot Arena](https://lmarena.ai/leaderboard/text) ranks Claude and GPT models at the top
+- [LLM Arena](https://llm-stats.com/arenas/llm-arena/chat-arena) (crowdsourced voting) shows the Gemini flash model leading, tailed by Opus and Deepseek
+- [Chatbot Arena](https://lmarena.ai/leaderboard/text) ranks Gemini and Grok models at the top
 - [Expert reviews](https://intellectualead.com/best-llm-writing/) favor different models for creative vs. technical writing
+- [Eqbench creative writing longform](https://eqbench.com/creative_writing_longform.html) ranks Opus, sonnet, and Polaris Alpha models at the top
+- [Eqbench creative writing](https://eqbench.com/creative_writing.html) favours Claude Opus, Kimi K2 and GPT5.2.
+
+
 
 **Why the disagreement?** They measure **generic chat performance**, not how models behave in *your* domain, with *your* prompts, documents, constraints, and budget.
 
@@ -33,8 +37,11 @@ A model that tops a leaderboard may:
 - Handle technical terminology poorly
 - Be brittle to your prompt structures
 - Be too expensive at scale
+- Be outdated (new models lag behind)
 
 Static benchmarks won't tell you that. Only evaluation on *your* content will.
+
+In addition, real-world writing pipelines often use an "editor agent" to provide feedback, and in [RAG-setting ensure the grounding of its answers](https://arxiv.org/html/2504.14858v3?ref=yonglun.me). A complete evaluation must also measure how well a model **responds to criticism and revises its work**, and how effective it is **as a critic** for other models.
 
 ---
 
@@ -165,20 +172,20 @@ See [`config.yaml`](config.yaml) for a complete example. Key settings include:
 runs/{run_id}/
 +-- tournament.duckdb            # Full structured data (matches, ratings)
 +-- {topic_slug}/
-¦   +-- v0/                      # Initial essays
-¦   ¦   +-- {writer_slug}.md
-¦   +-- feedback/                # Critic feedback
-¦   ¦   +-- {writer_slug}__{critic_slug}.md
-¦   +-- v1/                      # Revised essays
-¦   ¦   +-- {writer_slug}__{critic_slug}.md
-¦   +-- ranking/
-¦       +-- matches.jsonl        # Match log (backup)
-¦       +-- leaderboard.csv
-¦       +-- leaderboard.md
-¦       +-- leaderboard.json     # Structured rankings
-¦       +-- writer_aggregate.md
-¦       +-- critic_metrics.md
-¦       +-- analysis_{entity}.md # Strength/weakness analysis
+ï¿½   +-- v0/                      # Initial essays
+ï¿½   ï¿½   +-- {writer_slug}.md
+ï¿½   +-- feedback/                # Critic feedback
+ï¿½   ï¿½   +-- {writer_slug}__{critic_slug}.md
+ï¿½   +-- v1/                      # Revised essays
+ï¿½   ï¿½   +-- {writer_slug}__{critic_slug}.md
+ï¿½   +-- ranking/
+ï¿½       +-- matches.jsonl        # Match log (backup)
+ï¿½       +-- leaderboard.csv
+ï¿½       +-- leaderboard.md
+ï¿½       +-- leaderboard.json     # Structured rankings
+ï¿½       +-- writer_aggregate.md
+ï¿½       +-- critic_metrics.md
+ï¿½       +-- analysis_{entity}.md # Strength/weakness analysis
 +-- config_snapshot.yaml
 +-- run_metadata.json
 ``
