@@ -10,7 +10,8 @@ import structlog
 import yaml
 from sqlmodel import SQLModel, create_engine
 
-from llm_tournament.core.config import TournamentConfig, get_git_hash
+from llm_tournament import __version__
+from llm_tournament.core.config import TournamentConfig
 
 from .db_store import DBStore
 from .file_store import FileStore
@@ -82,7 +83,7 @@ class TournamentStore:
             "run_id": self.run_id,
             "started_at": datetime.now(UTC).isoformat(),
             "seed": self.config.seed,
-            "git_hash": get_git_hash(),
+            "llm_tournament_version": __version__,
             "ranking_algorithm": self.config.ranking.algorithm,
         }
         metadata_path = self.base_dir / "run_metadata.json"
