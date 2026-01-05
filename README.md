@@ -15,8 +15,8 @@ Public leaderboards (and personal experience) regularly disagree:
 - [LLM Arena](https://llm-stats.com/arenas/llm-arena/chat-arena) (crowdsourced voting) shows the Gemini flash model leading, tailed by Opus and Deepseek
 - [Chatbot Arena](https://lmarena.ai/leaderboard/text) ranks Gemini and Grok models at the top
 - [Expert reviews](https://intellectualead.com/best-llm-writing/) favor different models for creative vs. technical writing
-- [Eqbench creative writing longform](https://eqbench.com/creative_writing_longform.html) ranks Opus, sonnet, and Polaris Alpha models at the top
-- [Eqbench creative writing](https://eqbench.com/creative_writing.html) favours Claude Opus, Kimi K2 and GPT5.2.
+- [Eqbench creative writing longform](https://eqbench.com/creative_writing_longform.html) ranks Opus, Sonnet, and Polaris Alpha models at the top
+- [Eqbench creative writing](https://eqbench.com/creative_writing.html) favours Claude Opus, Kimi K2 and GPT 5.2.
 
 
 
