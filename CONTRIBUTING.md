@@ -25,10 +25,16 @@ docs(readme): update quick start
 
 ## Git Hooks (Conventional Commits)
 
-Install the commit-msg hook:
+Install the commit-msg hook (required per clone; hooks are not versioned):
 
 ```bash
 uv run invoke install-hooks
+```
+
+Verify it's active:
+
+```bash
+ls .git/hooks/commit-msg
 ```
 
 ## Pre-commit (Ruff + Ruff Format)
