@@ -16,6 +16,11 @@ from pydantic import BaseModel, Field, field_validator
 DEFAULT_SLUG_MAX_LENGTH = 50
 
 
+def safe_id(value: str) -> str:
+    """Convert arbitrary ID to filesystem-safe slug."""
+    return value.replace("/", "__").replace(":", "_")
+
+
 def truncate_slug(value: str, max_length: int) -> str:
     """Cap slug length to keep filesystem paths manageable on systems with path length
     limits (e.g., Windows)."""
@@ -117,7 +122,7 @@ class TournamentConfig(BaseModel):
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
     simple_mode: bool = False
     seed: int = 42
-    slug_max_length: int = Field(default=DEFAULT_SLUG_MAX_LENGTH, ge=1)
+    slug_max_length: int = Field(default=50, ge=1, le=100)
     output_dir: str = "./runs"
     api_key: str | None = None
 
@@ -135,6 +140,19 @@ class TournamentConfig(BaseModel):
         for topic in self.topics:
             if topic.slug_max_length is None:
                 topic.slug_max_length = self.slug_max_length
+
+    def get_slug_model(self, model_id: str, max_length: int | None = None) -> str:
+        """Convert model ID to filesystem-safe slug."""
+        if max_length is None:
+            max_length = self.slug_max_length
+        return truncate_slug(safe_id(model_id), max_length)
+
+    def get_slug_topic(self, title: str, max_length: int | None = None) -> str:
+        """Convert a topic title to a URL-safe slug."""
+        if max_length is None:
+            max_length = self.slug_max_length
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+        return truncate_slug(slug, max_length)
 
     def get_api_key(self) -> str:
         """Get API key from config or environment."""
@@ -189,23 +207,6 @@ def calculate_nr_rounds(num_candidates: int) -> int:
         return 1
     min_rounds = 3
     return max(min_rounds, math.ceil(math.log2(num_candidates)) + 1)
-
-
-def safe_id(value: str) -> str:
-    """Convert arbitrary ID to filesystem-safe slug."""
-    return value.replace("/", "__").replace(":", "_")
-
-
-def model_slug(model_id: str, max_length: int = DEFAULT_SLUG_MAX_LENGTH) -> str:
-    """Convert model ID to filesystem-safe slug.
-
-    Args:
-        model_id: OpenRouter model ID (e.g., 'openai/gpt-4-turbo').
-
-    Returns:
-        Filesystem-safe slug (e.g., 'openai__gpt-4-turbo').
-    """
-    return truncate_slug(safe_id(model_id), max_length)
 
 
 def hash_messages(messages: list[dict[str, Any]], params: dict[str, Any]) -> str:

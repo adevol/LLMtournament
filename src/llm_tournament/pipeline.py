@@ -6,7 +6,7 @@ import asyncio
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig, calculate_nr_rounds, model_slug
+from llm_tournament.core.config import TournamentConfig, calculate_nr_rounds
 from llm_tournament.ranking import RankingSystem, create_ranking_system
 from llm_tournament.services.aggregation import AggregationService
 from llm_tournament.services.analysis import AnalysisService
@@ -41,7 +41,7 @@ class TournamentPipeline:
         max_critics: int | None = None,
         max_concurrency: int = 5,
     ) -> None:
-        """Initialize pipeline.
+        """Initialize the pipeline.
 
         Args:
             config: Tournament configuration.
@@ -65,8 +65,8 @@ class TournamentPipeline:
         self.judges = config.judges
 
         # Slugify model IDs
-        self.writer_slugs = [model_slug(w, self.config.slug_max_length) for w in self.writers]
-        self.critic_slugs = [model_slug(c, self.config.slug_max_length) for c in self.critics]
+        self.writer_slugs = [self.config.get_model_slug(w) for w in self.writers]
+        self.critic_slugs = [self.config.get_model_slug(c) for c in self.critics]
 
         # Initialize services
         self.submission_service = SubmissionService(config, client, store, self._semaphore)
