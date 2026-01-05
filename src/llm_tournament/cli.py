@@ -82,12 +82,8 @@ def run(
     max_critics: Annotated[
         int | None, typer.Option("--max-critics", help="Limit number of critics")
     ] = None,
-    rounds: Annotated[
-        int | None, typer.Option("--rounds", help="Number of ranking rounds")
-    ] = None,
-    run_id: Annotated[
-        str | None, typer.Option("--run-id", help="Custom run ID")
-    ] = None,
+    rounds: Annotated[int | None, typer.Option("--rounds", help="Number of ranking rounds")] = None,
+    run_id: Annotated[str | None, typer.Option("--run-id", help="Custom run ID")] = None,
     max_concurrency: Annotated[
         int, typer.Option("--max-concurrency", help="Maximum concurrent API calls")
     ] = 5,
@@ -95,9 +91,7 @@ def run(
         str | None,
         typer.Option("--ranking", help="Ranking algorithm: elo or trueskill"),
     ] = None,
-    verbose: Annotated[
-        bool, typer.Option("--verbose", "-V", help="Verbose output")
-    ] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-V", help="Verbose output")] = False,
 ) -> None:
     """Run a tournament with the given configuration.
 
@@ -138,11 +132,7 @@ def run(
             config.ranking.algorithm = ranking_algorithm
 
         # Create client
-        cache_path = (
-            Path(config.output_dir) / ".cache" / "api_cache.duckdb"
-            if use_cache
-            else None
-        )
+        cache_path = Path(config.output_dir) / ".cache" / "api_cache.duckdb" if use_cache else None
 
         if dry_run:
             console.print("[yellow]DRY RUN MODE - using fake LLM responses[/yellow]")
@@ -244,9 +234,7 @@ def info() -> None:
     console.print("  uv run llm-tournament run config.yaml --max-concurrency 10\n")
 
     console.print("  # Limit scope")
-    console.print(
-        "  uv run llm-tournament run config.yaml --max-writers 3 --max-critics 3\n"
-    )
+    console.print("  uv run llm-tournament run config.yaml --max-writers 3 --max-critics 3\n")
 
     console.print("  # Validate config")
     console.print("  uv run llm-tournament validate config.yaml")

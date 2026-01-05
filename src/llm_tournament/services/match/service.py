@@ -70,9 +70,7 @@ class MatchService:
         logger.info("ranking_round", round=round_num)
 
         self._sync_ratings(candidates, ranking_system)
-        pairs, bye_recipient = swiss_pairing(
-            candidates, seed=self.config.seed + round_num
-        )
+        pairs, bye_recipient = swiss_pairing(candidates, seed=self.config.seed + round_num)
         logger.info(
             "round_pairs",
             count=len(pairs),
@@ -86,9 +84,7 @@ class MatchService:
             self._apply_result(candidate_a, candidate_b, result, ranking_system)
             await self._persist_match(topic_slug, result)
 
-    def _sync_ratings(
-        self, candidates: list[Candidate], ranking_system: RankingSystem
-    ) -> None:
+    def _sync_ratings(self, candidates: list[Candidate], ranking_system: RankingSystem) -> None:
         """Update candidate ratings from ranking system before pairing."""
         for c in candidates:
             c.rating = ranking_system.get_rating(c.id)
@@ -147,9 +143,7 @@ class MatchService:
     ) -> None:
         """Update rankings and opponent tracking from match result."""
         winner, loser = (
-            (candidate_a, candidate_b)
-            if result.winner == "A"
-            else (candidate_b, candidate_a)
+            (candidate_a, candidate_b) if result.winner == "A" else (candidate_b, candidate_a)
         )
         ranking_system.update(winner.id, loser.id, result.confidence)
 

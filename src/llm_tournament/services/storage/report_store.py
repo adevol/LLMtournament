@@ -98,10 +98,7 @@ class ReportStore:
         def _save() -> None:
             ranking_dir = self._file_store.ranking_dir(topic_slug)
             json_path = ranking_dir / "leaderboard.json"
-            data = [
-                r.model_dump() if hasattr(r, "model_dump") else dict(r)
-                for r in leaderboard
-            ]
+            data = [r.model_dump() if hasattr(r, "model_dump") else dict(r) for r in leaderboard]
             with json_path.open("w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
 

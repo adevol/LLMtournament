@@ -1,5 +1,8 @@
 # LLM Tournament Evaluator
 
+[![CI](https://github.com/adevol/LLMtournament/actions/workflows/ci.yml/badge.svg)](https://github.com/adevol/LLMtournament/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE.md)
+
 A flexible, auditable framework for identifying **the best LLM for your specific use case** by running head-to-head evaluations of OpenRouter-hosted models with efficient tournament-style ranking.
 
 Built for real production systems where global benchmarks fail and decisions must be defensible, reproducible, and cost-aware.

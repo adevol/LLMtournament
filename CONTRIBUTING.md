@@ -9,9 +9,18 @@ prefixes and git hooks to keep history consistent.
 uv sync --extra dev
 ```
 
+Useful commands:
+
+```bash
+uv run invoke lint
+uv run invoke format-check
+uv run invoke test
+uv run invoke ci
+```
+
 ## Commit Messages
 
-Commit messages must start with one of the following prefixes (optional scope
+Commit messages should start with one of the following prefixes (optional scope
 allowed): `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `perf:`,
 `build:`, `ci:`, `style:`, `revert:`.
 
@@ -25,7 +34,7 @@ docs(readme): update quick start
 
 ## Git Hooks (Conventional Commits)
 
-Install the commit-msg hook (required per clone; hooks are not versioned):
+Install the commit-msg hook (optional but recommended; hooks are not versioned):
 
 ```bash
 uv run invoke install-hooks
@@ -36,6 +45,8 @@ Verify it's active:
 ```bash
 ls .git/hooks/commit-msg
 ```
+
+CI does not enforce commit message format; the hook is local and optional.
 
 ## Pre-commit (Ruff + Ruff Format)
 

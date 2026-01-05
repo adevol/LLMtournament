@@ -143,9 +143,7 @@ def repair_json(broken_json: str) -> str:
     return text.replace("'", '"')
 
 
-def _build_judge_messages(
-    context: MatchContext, strict: bool
-) -> list[dict[str, str]]:
+def _build_judge_messages(context: MatchContext, strict: bool) -> list[dict[str, str]]:
     """Build judge messages for a judgment request.
 
     Args:
@@ -180,9 +178,7 @@ async def _request_judgment(
         Raw response string from the model.
     """
     messages = _build_judge_messages(context, strict)
-    return await client.complete(
-        judge_model, messages, context.max_tokens, context.temperature
-    )
+    return await client.complete(judge_model, messages, context.max_tokens, context.temperature)
 
 
 def _parse_with_repair(response: str) -> JudgeResult:
@@ -204,9 +200,7 @@ def _parse_with_repair(response: str) -> JudgeResult:
         return parse_judge_response(repaired)
 
 
-def _next_fallback_judge(
-    rotation: JudgeRotation | None, attempted: set[str]
-) -> str | None:
+def _next_fallback_judge(rotation: JudgeRotation | None, attempted: set[str]) -> str | None:
     """Select the next fallback judge not yet attempted.
 
     Args:
@@ -419,17 +413,13 @@ async def judge_match(
     attempted = _attempted_judges or {judge_model}
 
     try:
-        response = await _request_judgment(
-            client, judge_model, context, False
-        )
+        response = await _request_judgment(client, judge_model, context, False)
         return parse_judge_response(response)
     except ValueError:
         logger.warning("judge_parse_failed", judge=judge_model, retrying=True)
 
         try:
-            response = await _request_judgment(
-                client, judge_model, context, True
-            )
+            response = await _request_judgment(client, judge_model, context, True)
             return _parse_with_repair(response)
         except ValueError:
             fallback = _next_fallback_judge(rotation, attempted)
@@ -696,9 +686,7 @@ async def run_match_parallel_majority(
         logger.info("expanding_with_sub_judges", threshold=threshold)
 
         sub_to_use = (
-            sub_judges[:sub_judge_count]
-            if len(sub_judges) >= sub_judge_count
-            else sub_judges
+            sub_judges[:sub_judge_count] if len(sub_judges) >= sub_judge_count else sub_judges
         )
         sub_results = await _run_parallel_judges(
             client,
@@ -708,9 +696,7 @@ async def run_match_parallel_majority(
 
         # Combine all results (5 total)
         all_results = results + sub_results
-        all_votes, winner, avg_confidence, winning_result = _summarize_votes(
-            all_results
-        )
+        all_votes, winner, avg_confidence, winning_result = _summarize_votes(all_results)
 
         logger.info(
             "expanded_vote",

@@ -167,9 +167,7 @@ class TestPipelineDryRun:
             )
 
             assert store.run_id == "conv_test"
-            assert (
-                store.base_dir / "test-topic" / "ranking" / "leaderboard.md"
-            ).exists()
+            assert (store.base_dir / "test-topic" / "ranking" / "leaderboard.md").exists()
 
             await store.close()
 

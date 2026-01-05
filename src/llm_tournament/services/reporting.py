@@ -75,9 +75,7 @@ def generate_writer_aggregate(
         "| Writer | Mean Rating | Variants |",
         "| --- | --- | --- |",
     ]
-    for writer, ratings in sorted(
-        writer_ratings.items(), key=lambda x: -sum(x[1]) / len(x[1])
-    ):
+    for writer, ratings in sorted(writer_ratings.items(), key=lambda x: -sum(x[1]) / len(x[1])):
         mean_rating = sum(ratings) / len(ratings)
         lines.append(f"| {writer[:30]} | {mean_rating:.1f} | {len(ratings)} |")
 
@@ -110,9 +108,7 @@ def generate_critic_metrics(
         "| Critic | Mean Rating | Essays |",
         "| --- | --- | --- |",
     ]
-    for critic, ratings in sorted(
-        critic_ratings.items(), key=lambda x: -sum(x[1]) / len(x[1])
-    ):
+    for critic, ratings in sorted(critic_ratings.items(), key=lambda x: -sum(x[1]) / len(x[1])):
         mean_rating = sum(ratings) / len(ratings)
         lines.append(f"| {critic[:30]} | {mean_rating:.1f} | {len(ratings)} |")
 
