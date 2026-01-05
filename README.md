@@ -212,22 +212,7 @@ For a detailed explanation, see [docs/architecture.md](docs/architecture.md).
 
 ### Directory Structure
 
-`
-src/llm_tournament/
-+-- cli.py              # CLI entry point
-+-- pipeline.py         # Orchestration logic
-+-- core/               # Configuration & shared utilities
-+-- models/             # SQLModel database entities
-+-- prompts/            # Prompt templates
-+-- ranking/            # Elo/TrueSkill algorithms
-+-- services/           # Business logic
-    +-- llm/            # LLM client (OpenRouter)
-    +-- match/          # Pairing & judging
-    +-- storage/        # DuckDB persistence
-    +-- submission.py   # Essay generation & revision
-    +-- analysis.py     # Per-model analysis
-    +-- aggregation.py  # Cross-model insights
-``text
+```text
 src/llm_tournament/
 ├── cli.py              # CLI entry point
 ├── pipeline.py         # Orchestration logic
