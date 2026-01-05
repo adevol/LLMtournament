@@ -3,6 +3,7 @@
 import tempfile
 from pathlib import Path
 
+import pydantic
 import pytest
 import yaml
 
@@ -57,7 +58,7 @@ class TestTournamentConfig:
 
     def test_empty_model_list_fails(self):
         """Test that empty model lists are rejected."""
-        with pytest.raises(ValueError):
+        with pytest.raises(pydantic.ValidationError, match="at least 1 item"):
             TournamentConfig(
                 writers=[],
                 critics=["model/b"],
@@ -72,7 +73,7 @@ class TestTournamentConfig:
 
     def test_empty_model_id_fails(self):
         """Test that empty model IDs are rejected."""
-        with pytest.raises(ValueError):
+        with pytest.raises(pydantic.ValidationError, match="cannot be empty"):
             TournamentConfig(
                 writers=["model/a", ""],
                 critics=["model/b"],

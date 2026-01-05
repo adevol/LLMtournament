@@ -112,7 +112,8 @@ class TestSwissPairing:
         assert bye is not None
         assert bye.id == "c"
         pair_ids = {pairs[0][0].id, pairs[0][1].id}
-        assert "a" in pair_ids and "b" in pair_ids
+        assert "a" in pair_ids
+        assert "b" in pair_ids
         assert bye.byes == 1
 
         c_candidate = next(cand for cand in candidates if cand.id == "c")
@@ -123,7 +124,8 @@ class TestSwissPairing:
         assert bye2 is not None
         assert bye2.id == "b"
         pair2_ids = {pairs_round_2[0][0].id, pairs_round_2[0][1].id}
-        assert "a" in pair2_ids and "c" in pair2_ids
+        assert "a" in pair2_ids
+        assert "c" in pair2_ids
         assert bye2.byes == 1
 
     def test_fallback_rematches(self):

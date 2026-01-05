@@ -1,5 +1,6 @@
 """Tests for pipeline in dry-run mode."""
 
+import json
 import tempfile
 
 import pytest
@@ -142,8 +143,6 @@ class TestPipelineDryRun:
             assert jsonl_path.exists()
 
             # Check content is valid JSONL
-            import json
-
             with jsonl_path.open() as f:
                 lines = f.readlines()
             assert len(lines) > 0
