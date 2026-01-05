@@ -28,6 +28,11 @@ from llm_tournament.services.submission import SubmissionService
 logger = structlog.get_logger()
 
 
+def _apply_limit(items: list, limit: int | None) -> list:
+    """Return items[:limit] if limit is set, else return all items."""
+    return items[:limit] if limit else items
+
+
 class TournamentPipeline:
     """Orchestrates the complete tournament pipeline with async execution."""
 
@@ -59,14 +64,14 @@ class TournamentPipeline:
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
         # Apply limits
-        self.topics = config.topics[:max_topics] if max_topics else config.topics
-        self.writers = config.writers[:max_writers] if max_writers else config.writers
-        self.critics = config.critics[:max_critics] if max_critics else config.critics
+        self.topics = _apply_limit(config.topics, max_topics)
+        self.writers = _apply_limit(config.writers, max_writers)
+        self.critics = _apply_limit(config.critics, max_critics)
         self.judges = config.judges
 
         # Slugify model IDs
-        self.writer_slugs = [self.config.get_model_slug(w) for w in self.writers]
-        self.critic_slugs = [self.config.get_model_slug(c) for c in self.critics]
+        self.writer_slugs = [self.config.get_slug_model(w) for w in self.writers]
+        self.critic_slugs = [self.config.get_slug_model(c) for c in self.critics]
 
         # Initialize services
         self.submission_service = SubmissionService(config, client, store, self._semaphore)
@@ -113,21 +118,23 @@ class TournamentPipeline:
         logger.info("stage_analysis", topic=topic_slug)
         await self.analysis_service.run_analysis(topic_slug)
 
-    async def _run_ranking(self, topic_slug: str) -> None:
-        """Run pairwise tournament ranking."""
+    def _create_candidates(self) -> tuple[list[Candidate], str]:
+        """Create candidates based on simple_mode config."""
         if self.config.simple_mode:
             candidates = create_candidates_v0(self.writer_slugs, self.config.ranking.initial_elo)
-            version = "v0"
-        else:
-            candidates = create_candidates_v1(
-                self.writer_slugs, self.critic_slugs, self.config.ranking.initial_elo
-            )
-            version = "v1"
+            return candidates, "v0"
+        candidates = create_candidates_v1(
+            self.writer_slugs, self.critic_slugs, self.config.ranking.initial_elo
+        )
+        return candidates, "v1"
+
+    async def _run_ranking(self, topic_slug: str) -> None:
+        """Run pairwise tournament ranking."""
+        candidates, version = self._create_candidates()
 
         # Auto-calculate rounds if not specified
-        rounds = self.config.ranking.rounds
-        if rounds is None:
-            rounds = calculate_nr_rounds(len(candidates))
+        rounds = self.config.ranking.rounds or calculate_nr_rounds(len(candidates))
+        if self.config.ranking.rounds is None:
             logger.info("auto_calculated_rounds", candidates=len(candidates), rounds=rounds)
 
         ranking_system = create_ranking_system(self.config)

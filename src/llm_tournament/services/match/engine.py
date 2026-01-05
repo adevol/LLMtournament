@@ -266,7 +266,7 @@ class MatchResult:
     primary_judge: str
     audit_judges: list[str] = field(default_factory=list)
     final_decision: str = "primary"
-    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 def _build_match_result(
