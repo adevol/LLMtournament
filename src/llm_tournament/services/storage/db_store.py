@@ -48,11 +48,7 @@ class DBStore:
 
     async def save_match(self, topic_slug: str, match_data: Any) -> None:
         """Save a match result to database and JSONL backup."""
-        data = (
-            match_data.model_dump()
-            if hasattr(match_data, "model_dump")
-            else dict(match_data)
-        )
+        data = match_data.model_dump() if hasattr(match_data, "model_dump") else dict(match_data)
 
         if "topic_slug" not in data:
             data["topic_slug"] = topic_slug
@@ -72,9 +68,7 @@ class DBStore:
 
         await asyncio.to_thread(_save)
 
-    async def get_matches_for_essay(
-        self, topic_slug: str, essay_id: str
-    ) -> list[dict[str, Any]]:
+    async def get_matches_for_essay(self, topic_slug: str, essay_id: str) -> list[dict[str, Any]]:
         """Get all matches involving an essay."""
 
         def _get() -> list[dict[str, Any]]:
@@ -90,11 +84,7 @@ class DBStore:
 
     async def save_rating(self, topic_slug: str, rating_data: Any) -> None:
         """Save or update a rating in the database."""
-        data = (
-            rating_data.model_dump()
-            if hasattr(rating_data, "model_dump")
-            else dict(rating_data)
-        )
+        data = rating_data.model_dump() if hasattr(rating_data, "model_dump") else dict(rating_data)
 
         if "topic_slug" not in data:
             data["topic_slug"] = topic_slug

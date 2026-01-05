@@ -57,9 +57,7 @@ class FileStore:
         """Save an essay to file."""
 
         def _save() -> Path:
-            directory = (
-                self.v0_dir(topic_slug) if version == "v0" else self.v1_dir(topic_slug)
-            )
+            directory = self.v0_dir(topic_slug) if version == "v0" else self.v1_dir(topic_slug)
             path = directory / f"{writer_slug}.md"
             path.write_text(content, encoding="utf-8")
             logger.debug("saved_essay", path=str(path))
@@ -71,9 +69,7 @@ class FileStore:
         """Load an essay from file."""
 
         def _load() -> str:
-            directory = (
-                self.v0_dir(topic_slug) if version == "v0" else self.v1_dir(topic_slug)
-            )
+            directory = self.v0_dir(topic_slug) if version == "v0" else self.v1_dir(topic_slug)
             path = directory / f"{essay_id}.md"
             return path.read_text(encoding="utf-8")
 
@@ -92,9 +88,7 @@ class FileStore:
 
         return await asyncio.to_thread(_save)
 
-    async def load_feedback(
-        self, topic_slug: str, writer_slug: str, critic_slug: str
-    ) -> str:
+    async def load_feedback(self, topic_slug: str, writer_slug: str, critic_slug: str) -> str:
         """Load feedback from file."""
 
         def _load() -> str:

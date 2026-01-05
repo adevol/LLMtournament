@@ -45,9 +45,7 @@ class AggregationService:
             return
 
         ranking_summary, model_results = self._compute_aggregates(ratings)
-        await self.store.reports.save_aggregation_report(
-            "aggregate_ranking.md", ranking_summary
-        )
+        await self.store.reports.save_aggregation_report("aggregate_ranking.md", ranking_summary)
 
         await self._generate_model_profiles(model_results)
         await self._generate_cross_topic_insights(ranking_summary)
@@ -142,6 +140,4 @@ class AggregationService:
                 self.config.temperatures.judge,
             )
 
-            await self.store.reports.save_aggregation_report(
-                "cross_topic_insights.json", response
-            )
+            await self.store.reports.save_aggregation_report("cross_topic_insights.json", response)

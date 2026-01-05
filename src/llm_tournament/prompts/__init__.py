@@ -96,9 +96,7 @@ def revision_system_prompt() -> str:
 
 def revision_user_prompt(original_essay: str, feedback: str) -> str:
     """Generate user prompt for revision."""
-    return _PROMPTS["revision_user"].format(
-        original_essay=original_essay, feedback=feedback
-    )
+    return _PROMPTS["revision_user"].format(original_essay=original_essay, feedback=feedback)
 
 
 def judge_system_prompt() -> str:
@@ -124,9 +122,5 @@ def analysis_system_prompt() -> str:
 
 def analysis_user_prompt(entity_name: str, match_summaries: list[str]) -> str:
     """Generate user prompt for analysis."""
-    summaries_text = "\n\n".join(
-        f"Match {i + 1}:\n{s}" for i, s in enumerate(match_summaries)
-    )
-    return _PROMPTS["analysis_user"].format(
-        entity_name=entity_name, summaries_text=summaries_text
-    )
+    summaries_text = "\n\n".join(f"Match {i + 1}:\n{s}" for i, s in enumerate(match_summaries))
+    return _PROMPTS["analysis_user"].format(entity_name=entity_name, summaries_text=summaries_text)

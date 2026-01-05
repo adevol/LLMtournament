@@ -122,12 +122,8 @@ class TrueSkillSystem:
         if confidence < 1.0:
             # Increase sigma temporarily to reduce rating change impact
             sigma_scale = 1.0 + (1.0 - confidence) * 0.5
-            loser_rating = self._model.rating(
-                mu=loser.mu, sigma=loser.sigma * sigma_scale
-            )
-            winner_rating = self._model.rating(
-                mu=winner.mu, sigma=winner.sigma * sigma_scale
-            )
+            loser_rating = self._model.rating(mu=loser.mu, sigma=loser.sigma * sigma_scale)
+            winner_rating = self._model.rating(mu=winner.mu, sigma=winner.sigma * sigma_scale)
 
         # Rate the match: [[winner], [loser]] with ranks [1, 2]
         new_ratings = self._model.rate([[winner_rating], [loser_rating]])
@@ -184,7 +180,6 @@ class TrueSkillSystem:
             sorted by ordinal descending.
         """
         entries = [
-            (cid, r.ordinal, r.wins, r.losses, r.mu, r.sigma)
-            for cid, r in self._ratings.items()
+            (cid, r.ordinal, r.wins, r.losses, r.mu, r.sigma) for cid, r in self._ratings.items()
         ]
         return sorted(entries, key=lambda x: x[1], reverse=True)

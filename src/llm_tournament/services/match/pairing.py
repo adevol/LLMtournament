@@ -114,10 +114,7 @@ def _group_into_buckets(
     anchor_rating: float | None = None
 
     for candidate in sorted_candidates:
-        if (
-            anchor_rating is None
-            or abs(candidate.rating - anchor_rating) <= bucket_width
-        ):
+        if anchor_rating is None or abs(candidate.rating - anchor_rating) <= bucket_width:
             current_bucket.append(candidate)
             if anchor_rating is None:
                 anchor_rating = candidate.rating
@@ -183,9 +180,7 @@ def _create_pairs_from_shuffled(
     return pairs, unpaired
 
 
-def create_candidates_v0(
-    writer_slugs: list[str], initial_rating: float
-) -> list[Candidate]:
+def create_candidates_v0(writer_slugs: list[str], initial_rating: float) -> list[Candidate]:
     """Create candidates from v0 essays."""
     return [
         Candidate(id=slug, rating=initial_rating, writer_slug=slug, critic_slug=None)

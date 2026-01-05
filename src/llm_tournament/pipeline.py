@@ -70,20 +70,14 @@ class TournamentPipeline:
         self.critic_slugs = [model_slug(c) for c in self.critics]
 
         # Initialize services
-        self.submission_service = SubmissionService(
-            config, client, store, self._semaphore
-        )
+        self.submission_service = SubmissionService(config, client, store, self._semaphore)
         self.match_service = MatchService(config, client, store)
         self.analysis_service = AnalysisService(config, client, store, self._semaphore)
-        self.aggregation_service = AggregationService(
-            config, client, store, self._semaphore
-        )
+        self.aggregation_service = AggregationService(config, client, store, self._semaphore)
 
     async def run(self) -> None:
         """Execute complete tournament pipeline."""
-        logger.info(
-            "pipeline_start", topics=len(self.topics), writers=len(self.writers)
-        )
+        logger.info("pipeline_start", topics=len(self.topics), writers=len(self.writers))
 
         for topic in self.topics:
             logger.info("processing_topic", title=topic.title)
@@ -106,15 +100,11 @@ class TournamentPipeline:
         if not self.config.simple_mode:
             # Stage 2: Critique
             logger.info("stage_critique", topic=topic_slug)
-            await self.submission_service.run_critique_batch(
-                topic, self.writers, self.critics
-            )
+            await self.submission_service.run_critique_batch(topic, self.writers, self.critics)
 
             # Stage 3: Revision
             logger.info("stage_revision", topic=topic_slug)
-            await self.submission_service.run_revision_batch(
-                topic, self.writers, self.critics
-            )
+            await self.submission_service.run_revision_batch(topic, self.writers, self.critics)
 
         # Stage 4: Ranking
         logger.info("stage_ranking", topic=topic_slug)
@@ -127,9 +117,7 @@ class TournamentPipeline:
     async def _run_ranking(self, topic_slug: str) -> None:
         """Run pairwise tournament ranking."""
         if self.config.simple_mode:
-            candidates = create_candidates_v0(
-                self.writer_slugs, self.config.ranking.initial_elo
-            )
+            candidates = create_candidates_v0(self.writer_slugs, self.config.ranking.initial_elo)
             version = "v0"
         else:
             candidates = create_candidates_v1(
@@ -141,9 +129,7 @@ class TournamentPipeline:
         rounds = self.config.ranking.rounds
         if rounds is None:
             rounds = calculate_rounds(len(candidates))
-            logger.info(
-                "auto_calculated_rounds", candidates=len(candidates), rounds=rounds
-            )
+            logger.info("auto_calculated_rounds", candidates=len(candidates), rounds=rounds)
 
         ranking_system = create_ranking_system(self.config)
         ranking_system.initialize([c.id for c in candidates])
@@ -174,9 +160,7 @@ class TournamentPipeline:
         for rating_obj in rating_objects:
             await self.store.db.save_rating(topic_slug, rating_obj)
 
-        await self.store.reports.save_ranking_output(
-            topic_slug, rating_objects, ranking_system
-        )
+        await self.store.reports.save_ranking_output(topic_slug, rating_objects, ranking_system)
         await self.store.reports.export_to_json(topic_slug, rating_objects)
 
     async def _save_aggregates(
@@ -187,15 +171,11 @@ class TournamentPipeline:
     ) -> None:
         """Generate and save aggregate statistics."""
         writer_report = generate_writer_aggregate(candidates, ranking_system)
-        await self.store.reports.save_report(
-            topic_slug, "writer_aggregate.md", writer_report
-        )
+        await self.store.reports.save_report(topic_slug, "writer_aggregate.md", writer_report)
 
         if not self.config.simple_mode:
             critic_report = generate_critic_metrics(candidates, ranking_system)
-            await self.store.reports.save_report(
-                topic_slug, "critic_metrics.md", critic_report
-            )
+            await self.store.reports.save_report(topic_slug, "critic_metrics.md", critic_report)
 
 
 async def run_tournament(

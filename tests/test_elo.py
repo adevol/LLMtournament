@@ -220,9 +220,7 @@ class TestEloSystem:
         system = EloSystem()
         system.initialize(["a"])
 
-        system.update(
-            "a", "a", confidence=1.0
-        )  # Self-match won't happen but tests object access
+        system.update("a", "a", confidence=1.0)  # Self-match won't happen but tests object access
 
         rating_obj = system.get_rating_object("a")
         assert isinstance(rating_obj, EloRating)

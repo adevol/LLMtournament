@@ -39,7 +39,6 @@ def _load_fake_responses() -> dict[str, Any]:
     return _load_fake_responses._cache
 
 
-
 class LLMClient(ABC):
     """Abstract base class for async LLM clients."""
 
@@ -109,10 +108,7 @@ class FakeLLMClient(LLMClient):
         if (
             ("essay a" in last_lower and "essay b" in last_lower)
             or ("winner" in last_lower and "json" in last_lower)
-            or (
-                "compare" in last_lower
-                and ("essay" in last_lower or "winner" in last_lower)
-            )
+            or ("compare" in last_lower and ("essay" in last_lower or "winner" in last_lower))
             or ("pairwise" in system_content)
             or ("judge" in system_content)
         ):

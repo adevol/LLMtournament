@@ -126,9 +126,7 @@ class EloSystem:
         Args:
             candidate_ids: List of unique candidate identifiers.
         """
-        self._ratings = {
-            cid: EloRating(rating=self.initial_rating) for cid in candidate_ids
-        }
+        self._ratings = {cid: EloRating(rating=self.initial_rating) for cid in candidate_ids}
 
     def update(
         self,
@@ -192,9 +190,7 @@ class EloSystem:
             List of (candidate_id, rating, wins, losses) tuples,
             sorted by rating descending.
         """
-        entries = [
-            (cid, r.rating, r.wins, r.losses) for cid, r in self._ratings.items()
-        ]
+        entries = [(cid, r.rating, r.wins, r.losses) for cid, r in self._ratings.items()]
         return sorted(entries, key=lambda x: x[1], reverse=True)
 
     def get_rating_object(self, candidate_id: str) -> EloRating:

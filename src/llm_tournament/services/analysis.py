@@ -26,9 +26,7 @@ def build_match_summary(match: dict, essay_id: str) -> str:
     Returns:
         Formatted summary string.
     """
-    opponent = (
-        match["essay_b_id"] if match["essay_a_id"] == essay_id else match["essay_a_id"]
-    )
+    opponent = match["essay_b_id"] if match["essay_a_id"] == essay_id else match["essay_a_id"]
     won = (match["winner"] == "A" and match["essay_a_id"] == essay_id) or (
         match["winner"] == "B" and match["essay_b_id"] == essay_id
     )
@@ -121,6 +119,4 @@ class AnalysisService:
             return
 
         top_candidates = leaderboard[: self.config.analysis.top_k]
-        await asyncio.gather(
-            *[self.analyze_candidate(topic_slug, r) for r in top_candidates]
-        )
+        await asyncio.gather(*[self.analyze_candidate(topic_slug, r) for r in top_candidates])
