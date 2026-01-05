@@ -156,6 +156,10 @@ uv run pytest
 uv run pytest --cov=llm_tournament
 ```
 
+## Development
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for commit conventions, hooks, and tooling setup.
+
 ## Configuration
 
 See [`config.yaml`](config.yaml) for a complete example. Key settings include:

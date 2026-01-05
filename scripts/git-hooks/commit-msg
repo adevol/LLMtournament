@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+MSG_FILE="${1:-}"
+if [ -z "$MSG_FILE" ]; then
+  exit 0
+fi
+
+subject=$(head -n 1 "$MSG_FILE" | tr -d '\r')
+
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *)
+    exit 0
+    ;;
+esac
+
+pattern='^(feat|fix|chore|docs|refactor|test|perf|build|ci|style|revert)(\([^)]+\))?: .+'
+
+if printf '%s\n' "$subject" | grep -Eq "$pattern"; then
+  exit 0
+fi
+
+cat <<'EOF'
+Commit message must start with one of:
+  feat:, fix:, chore:, docs:, refactor:, test:, perf:, build:, ci:, style:, revert:
+Optional scope is allowed: type(scope): summary
+EOF
+exit 1
