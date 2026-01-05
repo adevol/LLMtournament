@@ -22,6 +22,7 @@ dependencies = [
     "sqlmodel>=0.0.31",
     "duckdb-engine>=0.17.0",
     "python-dotenv>=1.2.1",
+    "invoke>=2.2.1",
 ]
 
 [project.optional-dependencies]
