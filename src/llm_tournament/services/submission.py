@@ -35,7 +35,7 @@ class SubmissionService:
         self._semaphore = semaphore
 
     async def run_generation_batch(self, topic, writers: list[str]) -> None:
-        writer_slugs = [model_slug(w) for w in writers]
+        writer_slugs = [model_slug(w, self.config.slug_max_length) for w in writers]
 
         tasks = []
         for writer_id, writer_slug in zip(writers, writer_slugs, strict=True):
@@ -76,8 +76,8 @@ class SubmissionService:
         await self.store.files.save_essay(topic.slug, writer_slug, full_essay, "v0")
 
     async def run_critique_batch(self, topic, writers: list[str], critics: list[str]) -> None:
-        writer_slugs = [model_slug(w) for w in writers]
-        critic_slugs = [model_slug(c) for c in critics]
+        writer_slugs = [model_slug(w, self.config.slug_max_length) for w in writers]
+        critic_slugs = [model_slug(c, self.config.slug_max_length) for c in critics]
 
         tasks = []
         for writer_slug in writer_slugs:
@@ -104,8 +104,8 @@ class SubmissionService:
             await self.store.files.save_feedback(topic_slug, writer_slug, critic_slug, feedback)
 
     async def run_revision_batch(self, topic, writers: list[str], critics: list[str]) -> None:
-        writer_slugs = [model_slug(w) for w in writers]
-        critic_slugs = [model_slug(c) for c in critics]
+        writer_slugs = [model_slug(w, self.config.slug_max_length) for w in writers]
+        critic_slugs = [model_slug(c, self.config.slug_max_length) for c in critics]
 
         tasks = []
         for writer_id, writer_slug in zip(writers, writer_slugs, strict=True):

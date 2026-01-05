@@ -6,7 +6,7 @@ import asyncio
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig, calculate_rounds, model_slug
+from llm_tournament.core.config import TournamentConfig, calculate_nr_rounds, model_slug
 from llm_tournament.ranking import RankingSystem, create_ranking_system
 from llm_tournament.services.aggregation import AggregationService
 from llm_tournament.services.analysis import AnalysisService
@@ -20,8 +20,7 @@ from llm_tournament.services.match import (
 from llm_tournament.services.match.service import MatchService
 from llm_tournament.services.reporting import (
     build_rating_objects,
-    generate_critic_metrics,
-    generate_writer_aggregate,
+    generate_aggregate_report,
 )
 from llm_tournament.services.storage import TournamentStore
 from llm_tournament.services.submission import SubmissionService
@@ -66,8 +65,8 @@ class TournamentPipeline:
         self.judges = config.judges
 
         # Slugify model IDs
-        self.writer_slugs = [model_slug(w) for w in self.writers]
-        self.critic_slugs = [model_slug(c) for c in self.critics]
+        self.writer_slugs = [model_slug(w, self.config.slug_max_length) for w in self.writers]
+        self.critic_slugs = [model_slug(c, self.config.slug_max_length) for c in self.critics]
 
         # Initialize services
         self.submission_service = SubmissionService(config, client, store, self._semaphore)
@@ -83,7 +82,7 @@ class TournamentPipeline:
             logger.info("processing_topic", title=topic.title)
             await self._process_topic(topic.slug)
 
-        # Stage 6: Cross-Topic Aggregation
+        # Cross-Topic Aggregation
         logger.info("stage_aggregation")
         await self.aggregation_service.run_aggregation()
 
@@ -93,24 +92,24 @@ class TournamentPipeline:
         """Process a single topic through all stages."""
         topic = next(t for t in self.topics if t.slug == topic_slug)
 
-        # Stage 1: Generation
+        # Generation
         logger.info("stage_generation", topic=topic_slug)
         await self.submission_service.run_generation_batch(topic, self.writers)
 
         if not self.config.simple_mode:
-            # Stage 2: Critique
+            # Critique
             logger.info("stage_critique", topic=topic_slug)
             await self.submission_service.run_critique_batch(topic, self.writers, self.critics)
 
-            # Stage 3: Revision
+            # Revision
             logger.info("stage_revision", topic=topic_slug)
             await self.submission_service.run_revision_batch(topic, self.writers, self.critics)
 
-        # Stage 4: Ranking
+        # Ranking
         logger.info("stage_ranking", topic=topic_slug)
         await self._run_ranking(topic_slug)
 
-        # Stage 5: Analysis
+        # Analysis
         logger.info("stage_analysis", topic=topic_slug)
         await self.analysis_service.run_analysis(topic_slug)
 
@@ -128,7 +127,7 @@ class TournamentPipeline:
         # Auto-calculate rounds if not specified
         rounds = self.config.ranking.rounds
         if rounds is None:
-            rounds = calculate_rounds(len(candidates))
+            rounds = calculate_nr_rounds(len(candidates))
             logger.info("auto_calculated_rounds", candidates=len(candidates), rounds=rounds)
 
         ranking_system = create_ranking_system(self.config)
@@ -170,11 +169,26 @@ class TournamentPipeline:
         ranking_system: RankingSystem,
     ) -> None:
         """Generate and save aggregate statistics."""
-        writer_report = generate_writer_aggregate(candidates, ranking_system)
+        writer_report = generate_aggregate_report(
+            candidates,
+            ranking_system,
+            group_by="writer",
+            title="Writer Aggregate Rankings",
+            headers=("Writer", "Mean Rating", "Variants"),
+            max_slug_length=self.config.slug_max_length,
+        )
         await self.store.reports.save_report(topic_slug, "writer_aggregate.md", writer_report)
 
         if not self.config.simple_mode:
-            critic_report = generate_critic_metrics(candidates, ranking_system)
+            critic_report = generate_aggregate_report(
+                candidates,
+                ranking_system,
+                group_by="critic",
+                title="Critic Metrics",
+                headers=("Critic", "Mean Rating", "Essays"),
+                max_slug_length=self.config.slug_max_length,
+                description="Mean rating of essays revised using each critic's feedback.",
+            )
             await self.store.reports.save_report(topic_slug, "critic_metrics.md", critic_report)
 
 

@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from statistics import mean
+from typing import Literal
 
+from tabulate import tabulate
+
+from llm_tournament.core.config import truncate_slug
 from llm_tournament.models import Rating
 from llm_tournament.ranking import RankingSystem
 from llm_tournament.services.match import Candidate
@@ -52,64 +57,49 @@ def build_rating_objects(
     return rating_objects
 
 
-def generate_writer_aggregate(
+def generate_aggregate_report(
     candidates: list[Candidate],
     ranking_system: RankingSystem,
+    group_by: Literal["writer", "critic"],
+    title: str,
+    headers: tuple[str, str, str],
+    max_slug_length: int,
+    description: str | None = None,
 ) -> str:
-    """Generate writer aggregate report content.
+    """Generate an aggregate report grouped by a candidate attribute.
 
     Args:
         candidates: List of candidates.
         ranking_system: Ranking system with current ratings.
+        group_by: Attribute to group by ("writer" or "critic").
+        title: Report title (markdown heading).
+        headers: Column headers (name, rating, count).
+        max_slug_length: Maximum slug length for report labels.
+        description: Optional description line below title.
 
     Returns:
         Markdown report content.
     """
-    writer_ratings: dict[str, list[float]] = defaultdict(list)
+    attr = f"{group_by}_slug"
+    # Group ratings by the specified attribute
+    ratings_by_group: dict[str, list[float]] = defaultdict(list)
     for c in candidates:
-        writer_ratings[c.writer_slug].append(ranking_system.get_rating(c.id))
+        group_key = getattr(c, attr)
+        if group_key:
+            ratings_by_group[group_key].append(ranking_system.get_rating(c.id))
 
-    lines = [
-        "# Writer Aggregate Rankings",
-        "",
-        "| Writer | Mean Rating | Variants |",
-        "| --- | --- | --- |",
+    # Sort by mean rating descending and build table rows
+    def by_mean_desc(item: tuple[str, list[float]]) -> float:
+        return -mean(item[1])
+
+    rows = [
+        (truncate_slug(group, max_slug_length), f"{mean(ratings):.1f}", len(ratings))
+        for group, ratings in sorted(ratings_by_group.items(), key=by_mean_desc)
     ]
-    for writer, ratings in sorted(writer_ratings.items(), key=lambda x: -sum(x[1]) / len(x[1])):
-        mean_rating = sum(ratings) / len(ratings)
-        lines.append(f"| {writer[:30]} | {mean_rating:.1f} | {len(ratings)} |")
 
-    return "\n".join(lines)
-
-
-def generate_critic_metrics(
-    candidates: list[Candidate],
-    ranking_system: RankingSystem,
-) -> str:
-    """Generate critic metrics report content.
-
-    Args:
-        candidates: List of candidates.
-        ranking_system: Ranking system with current ratings.
-
-    Returns:
-        Markdown report content.
-    """
-    critic_ratings: dict[str, list[float]] = defaultdict(list)
-    for c in candidates:
-        if c.critic_slug:
-            critic_ratings[c.critic_slug].append(ranking_system.get_rating(c.id))
-
-    lines = [
-        "# Critic Metrics",
-        "",
-        "Mean rating of essays revised using each critic's feedback.",
-        "",
-        "| Critic | Mean Rating | Essays |",
-        "| --- | --- | --- |",
-    ]
-    for critic, ratings in sorted(critic_ratings.items(), key=lambda x: -sum(x[1]) / len(x[1])):
-        mean_rating = sum(ratings) / len(ratings)
-        lines.append(f"| {critic[:30]} | {mean_rating:.1f} | {len(ratings)} |")
+    lines = [f"# {title}", ""]
+    if description:
+        lines.extend([description, ""])
+    lines.append(tabulate(rows, headers=headers, tablefmt="github"))
 
     return "\n".join(lines)
