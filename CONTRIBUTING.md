@@ -9,6 +9,15 @@ prefixes and git hooks to keep history consistent.
 uv sync --extra dev
 ```
 
+Useful commands:
+
+```bash
+uv run invoke lint
+uv run invoke format-check
+uv run invoke test
+uv run invoke ci
+```
+
 ## Commit Messages
 
 Commit messages must start with one of the following prefixes (optional scope

@@ -18,3 +18,25 @@ def install_hooks(c):
     shutil.copyfile(hook_source, hook_dest)
     os.chmod(hook_dest, 0o755)
     print(f"Installed commit-msg hook to {hook_dest}")
+
+
+@task
+def lint(c):
+    c.run("ruff check .")
+
+
+@task
+def format_check(c):
+    c.run("ruff format --check .")
+
+
+@task
+def test(c):
+    c.run("pytest")
+
+
+@task
+def ci(c):
+    lint(c)
+    format_check(c)
+    test(c)
