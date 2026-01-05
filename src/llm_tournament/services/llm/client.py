@@ -324,7 +324,7 @@ class OpenRouterClient(LLMClient):
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com/llm-tournament",
+                "X-Title": "LLM Tournament",
             },
             json={
                 "model": model,

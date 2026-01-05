@@ -81,6 +81,7 @@ analysis:
 # Execution modes
 simple_mode: false         # If true, rank only v0 essays (skip revision)
 seed: 42                   # Random seed for reproducibility
+slug_max_length: 50        # Cap slugs to keep paths manageable on some filesystems (e.g., Windows)
 
 # Output settings
 output_dir: "./runs"

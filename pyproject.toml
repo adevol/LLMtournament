@@ -23,6 +23,7 @@ dependencies = [
     "duckdb-engine>=0.17.0",
     "python-dotenv>=1.2.1",
     "invoke>=2.2.1",
+    "tabulate>=0.9.0",
 ]
 
 [project.optional-dependencies]

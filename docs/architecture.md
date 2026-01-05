@@ -135,6 +135,8 @@ Encapsulates business logic into distinct domains:
 - **`LLMClient`**: 
   - Abstract interface for LLM providers (currently OpenRouter).
   - Handles caching (DuckDB), retries, and rate limiting.
+  - Structured-output frameworks (e.g., PydanticAI) are not required; consider them only
+    for judge JSON parsing and models with reliable schema support.
 
 ### 3. Data Layer (`src/llm_tournament/models/`, `src/llm_tournament/services/storage/`)
 - **SQLModel** (SQLAlchemy + Pydantic) is used for all database entities.

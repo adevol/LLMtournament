@@ -7,12 +7,26 @@ import json
 import math
 import os
 import re
-import subprocess
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+DEFAULT_SLUG_MAX_LENGTH = 50
+
+
+def safe_id(value: str) -> str:
+    """Convert arbitrary ID to filesystem-safe slug."""
+    return value.replace("/", "__").replace(":", "_")
+
+
+def truncate_slug(value: str, max_length: int) -> str:
+    """Cap slug length to keep filesystem paths manageable on systems with path length
+    limits (e.g., Windows)."""
+    if len(value) <= max_length:
+        return value
+    return value[:max_length]
 
 
 class TopicConfig(BaseModel):
@@ -21,6 +35,7 @@ class TopicConfig(BaseModel):
     title: str
     prompts: dict[str, str] = Field(default_factory=dict)
     source_pack: str | None = None
+    slug_max_length: int | None = Field(default=None, ge=1)
 
     @field_validator("prompts")
     @classmethod
@@ -32,7 +47,9 @@ class TopicConfig(BaseModel):
     @property
     def slug(self) -> str:
         """Generate URL-safe slug from title."""
-        return re.sub(r"[^a-z0-9]+", "-", self.title.lower()).strip("-")
+        slug = re.sub(r"[^a-z0-9]+", "-", self.title.lower()).strip("-")
+        max_length = self.slug_max_length or DEFAULT_SLUG_MAX_LENGTH
+        return truncate_slug(slug, max_length)
 
 
 class TokenCaps(BaseModel):
@@ -105,6 +122,7 @@ class TournamentConfig(BaseModel):
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
     simple_mode: bool = False
     seed: int = 42
+    slug_max_length: int = Field(default=50, ge=1, le=100)
     output_dir: str = "./runs"
     api_key: str | None = None
 
@@ -117,6 +135,24 @@ class TournamentConfig(BaseModel):
                 msg = "Model IDs cannot be empty"
                 raise ValueError(msg)
         return v
+
+    def model_post_init(self, __context: Any) -> None:
+        for topic in self.topics:
+            if topic.slug_max_length is None:
+                topic.slug_max_length = self.slug_max_length
+
+    def get_slug_model(self, model_id: str, max_length: int | None = None) -> str:
+        """Convert model ID to filesystem-safe slug."""
+        if max_length is None:
+            max_length = self.slug_max_length
+        return truncate_slug(safe_id(model_id), max_length)
+
+    def get_slug_topic(self, title: str, max_length: int | None = None) -> str:
+        """Convert a topic title to a URL-safe slug."""
+        if max_length is None:
+            max_length = self.slug_max_length
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+        return truncate_slug(slug, max_length)
 
     def get_api_key(self) -> str:
         """Get API key from config or environment."""
@@ -154,7 +190,7 @@ def load_config(path: str | Path) -> TournamentConfig:
     return TournamentConfig.model_validate(data)
 
 
-def calculate_rounds(num_candidates: int) -> int:
+def calculate_nr_rounds(num_candidates: int) -> int:
     """Calculate recommended Swiss tournament rounds.
 
     Uses ceil(log2(N)) + 1 heuristic to ensure stable rankings:
@@ -173,23 +209,6 @@ def calculate_rounds(num_candidates: int) -> int:
     return max(min_rounds, math.ceil(math.log2(num_candidates)) + 1)
 
 
-def safe_id(value: str) -> str:
-    """Convert arbitrary ID to filesystem-safe slug."""
-    return value.replace("/", "__").replace(":", "_")
-
-
-def model_slug(model_id: str) -> str:
-    """Convert model ID to filesystem-safe slug.
-
-    Args:
-        model_id: OpenRouter model ID (e.g., 'openai/gpt-4-turbo').
-
-    Returns:
-        Filesystem-safe slug (e.g., 'openai__gpt-4-turbo').
-    """
-    return safe_id(model_id)
-
-
 def hash_messages(messages: list[dict[str, Any]], params: dict[str, Any]) -> str:
     """Create deterministic hash for cache key.
 
@@ -202,26 +221,3 @@ def hash_messages(messages: list[dict[str, Any]], params: dict[str, Any]) -> str
     """
     content = json.dumps({"messages": messages, "params": params}, sort_keys=True)
     return hashlib.sha256(content.encode()).hexdigest()
-
-
-def get_git_hash() -> str | None:
-    """Get current git commit hash if available.
-
-    Returns:
-        Short git hash or None if not in a git repo.
-    """
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=5,
-        )
-        return result.stdout.strip()
-    except (
-        subprocess.CalledProcessError,
-        FileNotFoundError,
-        subprocess.TimeoutExpired,
-    ):
-        return None
