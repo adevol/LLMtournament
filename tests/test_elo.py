@@ -52,7 +52,7 @@ class TestUpdateElo:
     def test_upset_win_larger_change(self):
         """Test upset win produces larger rating change."""
         # Underdog wins
-        new_a, new_b = update_elo(1400, 1600, "A", k_factor=32)
+        new_a, _new_b = update_elo(1400, 1600, "A", k_factor=32)
 
         # Underdog should gain more than expected
         assert new_a - 1400 > 16  # More than half of K
@@ -60,7 +60,7 @@ class TestUpdateElo:
     def test_expected_win_smaller_change(self):
         """Test expected win produces smaller rating change."""
         # Favorite wins
-        new_a, new_b = update_elo(1600, 1400, "A", k_factor=32)
+        new_a, _new_b = update_elo(1600, 1400, "A", k_factor=32)
 
         # Favorite gains less than expected
         assert new_a - 1600 < 16
