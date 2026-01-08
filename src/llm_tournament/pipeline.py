@@ -27,11 +27,6 @@ from llm_tournament.services.submission import SubmissionService
 logger = structlog.get_logger()
 
 
-def _apply_limit(items: list, limit: int | None) -> list:
-    """Return items[:limit] if limit is set, else return all items."""
-    return items[:limit] if limit else items
-
-
 class TournamentPipeline:
     """Orchestrates the complete tournament pipeline with async execution."""
 
@@ -40,9 +35,6 @@ class TournamentPipeline:
         config: TournamentConfig,
         client: LLMClient,
         store: TournamentStore,
-        max_topics: int | None = None,
-        max_writers: int | None = None,
-        max_critics: int | None = None,
         max_concurrency: int = 5,
     ) -> None:
         """Initialize the pipeline.
@@ -51,9 +43,6 @@ class TournamentPipeline:
             config: Tournament configuration.
             client: Async LLM client.
             store: Tournament store for persistence.
-            max_topics: Optional limit on topics to process.
-            max_writers: Optional limit on writers.
-            max_critics: Optional limit on critics.
             max_concurrency: Maximum concurrent API calls.
         """
         self.config = config
@@ -62,15 +51,11 @@ class TournamentPipeline:
         self.max_concurrency = max_concurrency
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
-        # Apply limits
-        self.topics = _apply_limit(config.topics, max_topics)
-        self.writers = _apply_limit(config.writers, max_writers)
-        self.critics = _apply_limit(config.critics, max_critics)
         self.judges = config.judges
 
         # Slugify model IDs
-        self.writer_slugs = [self.config.get_slug_model(w) for w in self.writers]
-        self.critic_slugs = [self.config.get_slug_model(c) for c in self.critics]
+        self.writer_slugs = [self.config.get_slug_model(w) for w in self.config.writers]
+        self.critic_slugs = [self.config.get_slug_model(c) for c in self.config.critics]
 
         # Initialize services
         self.submission_service = SubmissionService(config, client, store, self._semaphore)
@@ -79,9 +64,13 @@ class TournamentPipeline:
 
     async def run(self) -> None:
         """Execute complete tournament pipeline."""
-        logger.info("pipeline_start", topics=len(self.topics), writers=len(self.writers))
+        logger.info(
+            "pipeline_start",
+            topics=len(self.config.topics),
+            writers=len(self.config.writers),
+        )
 
-        for topic in self.topics:
+        for topic in self.config.topics:
             logger.info("processing_topic", title=topic.title)
             await self._process_topic(topic.slug)
 
@@ -93,20 +82,24 @@ class TournamentPipeline:
 
     async def _process_topic(self, topic_slug: str) -> None:
         """Process a single topic through all stages."""
-        topic = next(t for t in self.topics if t.slug == topic_slug)
+        topic = next(t for t in self.config.topics if t.slug == topic_slug)
 
         # Generation
         logger.info("stage_generation", topic=topic_slug)
-        await self.submission_service.run_generation_batch(topic, self.writers)
+        await self.submission_service.run_generation_batch(topic, self.config.writers)
 
         if not self.config.simple_mode:
             # Critique
             logger.info("stage_critique", topic=topic_slug)
-            await self.submission_service.run_critique_batch(topic, self.writers, self.critics)
+            await self.submission_service.run_critique_batch(
+                topic, self.config.writers, self.config.critics
+            )
 
             # Revision
             logger.info("stage_revision", topic=topic_slug)
-            await self.submission_service.run_revision_batch(topic, self.writers, self.critics)
+            await self.submission_service.run_revision_batch(
+                topic, self.config.writers, self.config.critics
+            )
 
         # Ranking
         logger.info("stage_ranking", topic=topic_slug)
@@ -201,9 +194,6 @@ async def run_tournament(
     config: TournamentConfig,
     client: LLMClient,
     run_id: str | None = None,
-    max_topics: int | None = None,
-    max_writers: int | None = None,
-    max_critics: int | None = None,
     max_concurrency: int = 5,
 ) -> TournamentStore:
     """Convenience function to run a complete tournament.
@@ -212,17 +202,12 @@ async def run_tournament(
         config: Tournament configuration.
         client: Async LLM client.
         run_id: Optional run ID.
-        max_topics: Optional topic limit.
-        max_writers: Optional writer limit.
-        max_critics: Optional critic limit.
         max_concurrency: Maximum concurrent API calls.
 
     Returns:
         TournamentStore with all artifacts.
     """
     store = TournamentStore(config, run_id)
-    pipeline = TournamentPipeline(
-        config, client, store, max_topics, max_writers, max_critics, max_concurrency
-    )
+    pipeline = TournamentPipeline(config, client, store, max_concurrency)
     await pipeline.run()
     return store

@@ -101,13 +101,15 @@ class TestPipelineDryRun:
             store.close_sync()
 
     async def test_run_with_limits(self, minimal_config):
-        """Test pipeline respects writer/critic limits."""
+        """Test pipeline runs with limited config."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config.output_dir = tmpdir
+            # Limit writers in config directly
+            minimal_config.writers = [minimal_config.writers[0]]
             client = FakeLLMClient(seed=42)
             store = TournamentStore(minimal_config, run_id="test_run")
 
-            pipeline = TournamentPipeline(minimal_config, client, store, max_writers=1)
+            pipeline = TournamentPipeline(minimal_config, client, store)
             await pipeline.run()
 
             # Only one writer should have essay
@@ -163,7 +165,6 @@ class TestPipelineDryRun:
                 config=minimal_config,
                 client=client,
                 run_id="conv_test",
-                max_topics=1,
             )
 
             assert store.run_id == "conv_test"
