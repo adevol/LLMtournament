@@ -116,7 +116,7 @@ class AggregationService:
             )
             safe_model_id = safe_id(model_id)
             filename = f"model_profiles/{safe_model_id}.json"
-            await self.store.reports.save_aggregation_report(filename, response)
+            await self.store.reports.save_aggregation_report(filename, response.content)
 
     async def _generate_cross_topic_insights(self, ranking_summary: str) -> None:
         """Generate high-level tournament insights."""
@@ -140,4 +140,6 @@ class AggregationService:
                 self.config.temperatures.judge,
             )
 
-            await self.store.reports.save_aggregation_report("cross_topic_insights.json", response)
+            await self.store.reports.save_aggregation_report(
+                "cross_topic_insights.json", response.content
+            )

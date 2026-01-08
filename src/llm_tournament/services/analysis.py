@@ -103,7 +103,7 @@ class AnalysisService:
             )
             safe_essay_id = safe_id(essay_id)
             await self.store.reports.save_report(
-                topic_slug, f"analysis_{safe_essay_id}.md", analysis
+                topic_slug, f"analysis_{safe_essay_id}.md", analysis.content
             )
 
     async def run_analysis(self, topic_slug: str) -> None:

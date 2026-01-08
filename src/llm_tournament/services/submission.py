@@ -59,7 +59,7 @@ class SubmissionService:
                     self.config.token_caps.writer_tokens,
                     self.config.temperatures.writer,
                 )
-                sections[genre] = content
+                sections[genre] = content.content
 
         await asyncio.gather(
             *[generate_section(genre, prompt) for genre, prompt in prompts_map.items()]
@@ -100,7 +100,9 @@ class SubmissionService:
                 self.config.token_caps.critic_tokens,
                 self.config.temperatures.critic,
             )
-            await self.store.files.save_feedback(topic_slug, writer_slug, critic_slug, feedback)
+            await self.store.files.save_feedback(
+                topic_slug, writer_slug, critic_slug, feedback.content
+            )
 
     async def run_revision_batch(self, topic, writers: list[str], critics: list[str]) -> None:
         writer_slugs = [self.config.get_slug_model(w) for w in writers]
@@ -132,4 +134,6 @@ class SubmissionService:
                 self.config.token_caps.revision_tokens,
                 self.config.temperatures.revision,
             )
-            await self.store.files.save_revision(topic_slug, writer_slug, critic_slug, revised)
+            await self.store.files.save_revision(
+                topic_slug, writer_slug, critic_slug, revised.content
+            )

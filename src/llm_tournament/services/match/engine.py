@@ -178,7 +178,8 @@ async def _request_judgment(
         Raw response string from the model.
     """
     messages = _build_judge_messages(context, strict)
-    return await client.complete(judge_model, messages, context.max_tokens, context.temperature)
+    response = await client.complete(judge_model, messages, context.max_tokens, context.temperature)
+    return response.content
 
 
 def _parse_with_repair(response: str) -> JudgeResult:
