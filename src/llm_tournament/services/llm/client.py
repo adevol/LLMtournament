@@ -6,6 +6,7 @@ import asyncio
 import json
 import random
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,16 @@ from llm_tournament.core.config import hash_messages
 logger = structlog.get_logger()
 
 _FAKE_RESPONSES_PATH = Path(__file__).parent / "fake_responses.yaml"
+
+
+@dataclass(frozen=True)
+class LLMResponse:
+    """Response from an LLM API call with usage data."""
+
+    content: str
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
 
 
 def _load_fake_responses() -> dict[str, Any]:
@@ -49,7 +60,7 @@ class LLMClient(ABC):
         messages: list[dict[str, str]],
         max_tokens: int,
         temperature: float,
-    ) -> str:
+    ) -> LLMResponse:
         """Generate a completion from the model.
 
         Args:
@@ -59,7 +70,7 @@ class LLMClient(ABC):
             temperature: Sampling temperature.
 
         Returns:
-            Generated text content.
+            LLMResponse with content and usage data.
         """
 
     async def close(self) -> None:  # noqa: B027
@@ -84,7 +95,7 @@ class FakeLLMClient(LLMClient):
         messages: list[dict[str, str]],
         _max_tokens: int,
         _temperature: float,
-    ) -> str:
+    ) -> LLMResponse:
         """Return deterministic fake response.
 
         Args:
@@ -94,7 +105,7 @@ class FakeLLMClient(LLMClient):
             _temperature: Temperature (unused).
 
         Returns:
-            Deterministic fake response based on input.
+            LLMResponse with fake content and simulated token counts.
         """
         self.call_count += 1
         last_content = messages[-1]["content"] if messages else ""
@@ -104,7 +115,7 @@ class FakeLLMClient(LLMClient):
         if messages and messages[0].get("role") == "system":
             system_content = messages[0].get("content", "").lower()
 
-        result = None
+        content = None
         if (
             ("essay a" in last_lower and "essay b" in last_lower)
             or ("winner" in last_lower and "json" in last_lower)
@@ -112,15 +123,23 @@ class FakeLLMClient(LLMClient):
             or ("pairwise" in system_content)
             or ("judge" in system_content)
         ):
-            result = self._fake_judgment()
+            content = self._fake_judgment()
         elif "feedback" in last_lower or "critique" in last_lower:
-            result = self._fake_feedback(model)
+            content = self._fake_feedback(model)
         elif "revise" in last_lower:
-            result = self._fake_revision(model)
+            content = self._fake_revision(model)
         else:
-            result = self._fake_essay(model)
+            content = self._fake_essay(model)
 
-        return result
+        # Simulate token counts based on content length
+        prompt_tokens = sum(len(m.get("content", "").split()) for m in messages) * 2
+        completion_tokens = len(content.split()) * 2
+        return LLMResponse(
+            content=content,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        )
 
     def _fake_essay(self, model: str) -> str:
         """Generate a fake essay."""
@@ -184,46 +203,57 @@ class CacheDB:
         finally:
             conn.close()
 
-    async def get(self, key: str) -> str | None:
+    async def get(self, key: str) -> LLMResponse | None:
         """Get cached response (async).
 
         Args:
             key: Cache key (hash of messages + params).
 
         Returns:
-            Cached response or None if not found.
+            Cached LLMResponse or None if not found.
         """
 
-        def _get() -> str | None:
+        def _get() -> LLMResponse | None:
             conn = duckdb.connect(str(self.db_path))
             try:
                 result = conn.execute(
                     "SELECT response FROM cache WHERE cache_key = ?", [key]
                 ).fetchone()
-                return result[0] if result else None
+                if result:
+                    data = json.loads(result[0])
+                    return LLMResponse(**data)
+                return None
             finally:
                 conn.close()
 
         return await asyncio.to_thread(_get)
 
-    async def set(self, key: str, model: str, response: str) -> None:
+    async def set(self, key: str, model: str, response: LLMResponse) -> None:
         """Store response in cache (async).
 
         Args:
             key: Cache key.
             model: Model identifier.
-            response: Response content.
+            response: LLMResponse to cache.
         """
 
         def _set() -> None:
             conn = duckdb.connect(str(self.db_path))
             try:
+                response_json = json.dumps(
+                    {
+                        "content": response.content,
+                        "prompt_tokens": response.prompt_tokens,
+                        "completion_tokens": response.completion_tokens,
+                        "total_tokens": response.total_tokens,
+                    }
+                )
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO cache (cache_key, model, response)
                     VALUES (?, ?, ?)
                     """,
-                    [key, model, response],
+                    [key, model, response_json],
                 )
             finally:
                 conn.close()
@@ -260,7 +290,7 @@ class OpenRouterClient(LLMClient):
         messages: list[dict[str, str]],
         max_tokens: int,
         temperature: float,
-    ) -> str:
+    ) -> LLMResponse:
         """Generate completion via OpenRouter API.
 
         Args:
@@ -270,7 +300,7 @@ class OpenRouterClient(LLMClient):
             temperature: Sampling temperature.
 
         Returns:
-            Generated text content.
+            LLMResponse with content and usage data.
         """
         params = {"model": model, "max_tokens": max_tokens, "temperature": temperature}
         cache_key = hash_messages(messages, params)
@@ -302,7 +332,7 @@ class OpenRouterClient(LLMClient):
         messages: list[dict[str, str]],
         max_tokens: int,
         temperature: float,
-    ) -> str:
+    ) -> LLMResponse:
         """Make API call with retries.
 
         Args:
@@ -312,7 +342,7 @@ class OpenRouterClient(LLMClient):
             temperature: Temperature.
 
         Returns:
-            Generated content.
+            LLMResponse with content and usage data.
 
         Raises:
             httpx.HTTPStatusError: On API error after retries.
@@ -338,8 +368,23 @@ class OpenRouterClient(LLMClient):
 
         data = response.json()
         content: str = data["choices"][0]["message"]["content"]
-        logger.debug("api_response", model=model, tokens=len(content.split()))
-        return content
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+
+        logger.debug(
+            "api_response",
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
+        return LLMResponse(
+            content=content,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+        )
 
     async def close(self) -> None:
         """Close HTTP client."""
