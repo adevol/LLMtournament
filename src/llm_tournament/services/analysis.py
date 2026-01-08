@@ -83,7 +83,7 @@ class AnalysisService:
         """
         async with self._semaphore:
             essay_id = rating.candidate_id
-            matches = await self.store.db.get_matches_for_essay(topic_slug, essay_id)
+            matches = await self.store.get_matches_for_essay(topic_slug, essay_id)
 
             if not matches:
                 return
@@ -102,7 +102,7 @@ class AnalysisService:
                 self.config.temperatures.judge,
             )
             safe_essay_id = safe_id(essay_id)
-            await self.store.reports.save_report(
+            await self.store.save_report(
                 topic_slug, f"analysis_{safe_essay_id}.md", analysis.content
             )
 
@@ -112,7 +112,7 @@ class AnalysisService:
         Args:
             topic_slug: Topic slug.
         """
-        leaderboard = await self.store.db.get_leaderboard(topic_slug)
+        leaderboard = await self.store.get_leaderboard(topic_slug)
 
         if not leaderboard:
             logger.warning("no_leaderboard_for_analysis", topic=topic_slug)

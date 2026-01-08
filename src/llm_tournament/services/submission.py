@@ -72,7 +72,7 @@ class SubmissionService:
             full_text_parts.append(f"## {genre}\n\n{content}")
 
         full_essay = "\n\n".join(full_text_parts)
-        await self.store.files.save_essay(topic.slug, writer_slug, full_essay, "v0")
+        await self.store.save_essay(topic.slug, writer_slug, full_essay, "v0")
 
     async def run_critique_batch(self, topic, writers: list[str], critics: list[str]) -> None:
         writer_slugs = [self.config.get_slug_model(w) for w in writers]
@@ -89,7 +89,7 @@ class SubmissionService:
     ) -> None:
         async with self._semaphore:
             logger.debug("generating_critique", writer=writer_slug, critic=critic_slug)
-            essay = await self.store.files.load_essay(topic_slug, writer_slug, "v0")
+            essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
             messages = [
                 {"role": "system", "content": critic_system_prompt()},
                 {"role": "user", "content": critic_user_prompt(essay)},
@@ -100,9 +100,7 @@ class SubmissionService:
                 self.config.token_caps.critic_tokens,
                 self.config.temperatures.critic,
             )
-            await self.store.files.save_feedback(
-                topic_slug, writer_slug, critic_slug, feedback.content
-            )
+            await self.store.save_feedback(topic_slug, writer_slug, critic_slug, feedback.content)
 
     async def run_revision_batch(self, topic, writers: list[str], critics: list[str]) -> None:
         writer_slugs = [self.config.get_slug_model(w) for w in writers]
@@ -119,8 +117,8 @@ class SubmissionService:
     ) -> None:
         async with self._semaphore:
             logger.debug("generating_revision", writer=writer_slug, critic=critic_slug)
-            original_essay = await self.store.files.load_essay(topic_slug, writer_slug, "v0")
-            feedback = await self.store.files.load_feedback(topic_slug, writer_slug, critic_slug)
+            original_essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
+            feedback = await self.store.load_feedback(topic_slug, writer_slug, critic_slug)
             messages = [
                 {"role": "system", "content": revision_system_prompt()},
                 {
@@ -134,6 +132,4 @@ class SubmissionService:
                 self.config.token_caps.revision_tokens,
                 self.config.temperatures.revision,
             )
-            await self.store.files.save_revision(
-                topic_slug, writer_slug, critic_slug, revised.content
-            )
+            await self.store.save_revision(topic_slug, writer_slug, critic_slug, revised.content)

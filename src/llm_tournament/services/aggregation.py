@@ -39,13 +39,13 @@ class AggregationService:
 
     async def run_aggregation(self) -> None:
         """Run complete set of aggregation tasks."""
-        ratings = await self.store.db.get_all_ratings()
+        ratings = await self.store.get_all_ratings()
         if not ratings:
             logger.warning("no_ratings_for_aggregation")
             return
 
         ranking_summary, model_results = self._compute_aggregates(ratings)
-        await self.store.reports.save_aggregation_report("aggregate_ranking.md", ranking_summary)
+        await self.store.save_aggregation_report("aggregate_ranking.md", ranking_summary)
 
         await self._generate_model_profiles(model_results)
         await self._generate_cross_topic_insights(ranking_summary)
@@ -116,7 +116,7 @@ class AggregationService:
             )
             safe_model_id = safe_id(model_id)
             filename = f"model_profiles/{safe_model_id}.json"
-            await self.store.reports.save_aggregation_report(filename, response.content)
+            await self.store.save_aggregation_report(filename, response.content)
 
     async def _generate_cross_topic_insights(self, ranking_summary: str) -> None:
         """Generate high-level tournament insights."""
@@ -140,6 +140,4 @@ class AggregationService:
                 self.config.temperatures.judge,
             )
 
-            await self.store.reports.save_aggregation_report(
-                "cross_topic_insights.json", response.content
-            )
+            await self.store.save_aggregation_report("cross_topic_insights.json", response.content)
