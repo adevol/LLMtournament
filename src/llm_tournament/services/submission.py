@@ -56,8 +56,8 @@ class SubmissionService:
                 content = await self.client.complete(
                     writer_id,
                     messages,
-                    self.config.token_caps.writer_tokens,
-                    self.config.temperatures.writer,
+                    self.config.writer_tokens,
+                    self.config.writer_temp,
                 )
                 sections[genre] = content.content
 
@@ -97,8 +97,8 @@ class SubmissionService:
             feedback = await self.client.complete(
                 critic_id,
                 messages,
-                self.config.token_caps.critic_tokens,
-                self.config.temperatures.critic,
+                self.config.critic_tokens,
+                self.config.critic_temp,
             )
             await self.store.save_feedback(topic_slug, writer_slug, critic_slug, feedback.content)
 
@@ -129,7 +129,7 @@ class SubmissionService:
             revised = await self.client.complete(
                 writer_id,
                 messages,
-                self.config.token_caps.revision_tokens,
-                self.config.temperatures.revision,
+                self.config.revision_tokens,
+                self.config.revision_temp,
             )
             await self.store.save_revision(topic_slug, writer_slug, critic_slug, revised.content)

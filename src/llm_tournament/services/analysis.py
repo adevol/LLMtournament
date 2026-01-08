@@ -98,7 +98,7 @@ class AnalysisService:
             logger.warning("no_leaderboard_for_analysis", topic=topic_slug)
             return
 
-        top_candidates = leaderboard[: self.config.analysis.top_k]
+        top_candidates = leaderboard[: self.config.analysis_top_k]
         await asyncio.gather(*[self._analyze_candidate(topic_slug, r) for r in top_candidates])
 
     async def _analyze_candidate(self, topic_slug: str, rating: Rating) -> None:

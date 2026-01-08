@@ -99,8 +99,8 @@ class TestTournamentConfig:
                 )
             ],
         )
-        assert config.token_caps.writer_tokens == 1200
-        assert config.token_caps.critic_tokens == 300
+        assert config.writer_tokens == 1200
+        assert config.critic_tokens == 300
 
 
 class TestLoadConfig:
