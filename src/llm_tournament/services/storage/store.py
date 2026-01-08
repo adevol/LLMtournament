@@ -11,6 +11,7 @@ from typing import Any
 
 import structlog
 import yaml
+from sqlalchemy.pool import NullPool
 from sqlmodel import Session, SQLModel, col, create_engine, select
 
 from llm_tournament import __version__
@@ -68,7 +69,8 @@ class TournamentStore:
     def _init_db(self) -> None:
         """Initialize DuckDB database and create tables."""
         db_url = f"duckdb:///{self._db_path}"
-        self._engine = create_engine(db_url)
+        # Use NullPool to avoid connection pooling issues on Windows
+        self._engine = create_engine(db_url, poolclass=NullPool)
         SQLModel.metadata.create_all(self._engine)
 
     def _save_metadata(self) -> None:
@@ -374,3 +376,8 @@ class TournamentStore:
         """Synchronously dispose of the database engine."""
         if self._engine:
             self._engine.dispose()
+            self._engine = None
+        # Force garbage collection to release file handles on Windows
+        import gc
+
+        gc.collect()

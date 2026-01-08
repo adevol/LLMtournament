@@ -125,8 +125,8 @@ class AnalysisService:
             analysis = await self.client.complete(
                 self.config.judges[0],
                 messages,
-                self.config.token_caps.judge_tokens,
-                self.config.temperatures.judge,
+                self.config.judge_tokens,
+                self.config.judge_temp,
             )
             safe_essay_id = safe_id(essay_id)
             await self.store.save_report(
@@ -209,8 +209,8 @@ class AnalysisService:
             response = await self.client.complete(
                 self.config.judges[0],
                 messages,
-                self.config.token_caps.judge_tokens,
-                self.config.temperatures.judge,
+                self.config.judge_tokens,
+                self.config.judge_temp,
             )
             safe_model_id = safe_id(model_id)
             filename = f"model_profiles/{safe_model_id}.json"
@@ -234,8 +234,8 @@ class AnalysisService:
             response = await self.client.complete(
                 self.config.judges[0],
                 messages,
-                self.config.token_caps.judge_tokens,
-                self.config.temperatures.judge,
+                self.config.judge_tokens,
+                self.config.judge_temp,
             )
 
             await self.store.save_aggregation_report("cross_topic_insights.json", response.content)
