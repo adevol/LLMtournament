@@ -52,24 +52,6 @@ class TopicConfig(BaseModel):
         return truncate_slug(slug, max_length)
 
 
-class TokenCaps(BaseModel):
-    """Token limits per role."""
-
-    writer_tokens: int = 1200
-    critic_tokens: int = 300
-    revision_tokens: int = 1300
-    judge_tokens: int = 500
-
-
-class Temperatures(BaseModel):
-    """Temperature settings per role."""
-
-    writer: float = 0.7
-    critic: float = 0.3
-    revision: float = 0.5
-    judge: float = 0.2
-
-
 class RankingConfig(BaseModel):
     """Ranking algorithm configuration.
 
@@ -103,23 +85,34 @@ class RankingConfig(BaseModel):
     initial_sigma: float | None = None  # Default value if None: mu / 3
 
 
-class AnalysisConfig(BaseModel):
-    """Post-ranking analysis configuration."""
-
-    top_k: int = 10
-
-
 class TournamentConfig(BaseModel):
     """Complete tournament configuration."""
 
+    # Model lists
     writers: list[str] = Field(..., min_length=1)
     critics: list[str] = Field(..., min_length=1)
     judges: list[str] = Field(..., min_length=1)
     topics: list[TopicConfig] = Field(..., min_length=1)
-    token_caps: TokenCaps = Field(default_factory=TokenCaps)
-    temperatures: Temperatures = Field(default_factory=Temperatures)
+
+    # Token caps per role
+    writer_tokens: int = 1200
+    critic_tokens: int = 300
+    revision_tokens: int = 1300
+    judge_tokens: int = 500
+
+    # Temperature settings per role
+    writer_temp: float = 0.7
+    critic_temp: float = 0.3
+    revision_temp: float = 0.5
+    judge_temp: float = 0.2
+
+    # Analysis settings
+    analysis_top_k: int = 10
+
+    # Ranking configuration (kept as nested - complex enough)
     ranking: RankingConfig = Field(default_factory=RankingConfig)
-    analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
+
+    # Other settings
     simple_mode: bool = False
     seed: int = 42
     slug_max_length: int = Field(default=50, ge=1, le=100)

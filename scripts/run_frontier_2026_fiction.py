@@ -66,53 +66,47 @@ async def main() -> None:
         # - Avoiding both sycophantic agreement and contrarian overreach
         topics=[
             {
-                "title": "The Future of Work",
+                "title": "The Lantern of Hollowmere",
                 "prompts": {
-                    "Essay": (
-                        "Write a comprehensive essay exploring how AI and automation "
-                        "will transform employment over the next decade. Consider both "
-                        "opportunities and challenges, and propose strategies for "
-                        "workforce adaptation."
+                    "Story": (
+                        "Write a short story (900-1200 words) set in a DnD fantasy world. "
+                        "Center on a traveling party arriving at a fogbound fishing town "
+                        "and the discovery of a cursed lantern. Include dialogue, a moral "
+                        "choice, and a closing hook for the next session."
                     ),
                 },
                 "source_pack": (
-                    "Key concepts: automation displacement, skills gap, universal "
-                    "basic income, human-AI collaboration, labor market polarization."
+                    "Key concepts: coastal village, ancient bargain, wary locals, "
+                    "supernatural fog, price of salvation."
                 ),
             },
             {
-                # Tests: Arguing against a popular ESG narrative while being fair
-                # to opposing views. Reveals if AI defaults to safe consensus.
-                "title": "ESG Investing Underperformance",
+                "title": "The Obsidian Vault Heist",
                 "prompts": {
-                    "Essay": (
-                        "Explain why ESG investing may systematically underperform "
-                        "traditional investing, while acknowledging the strongest "
-                        "arguments in favor of ESG. Be rigorous about economic "
-                        "mechanisms rather than ideological."
+                    "Scene": (
+                        "Write a tense infiltration scene (600-900 words) in a DnD dungeon. "
+                        "Show the rogue, cleric, wizard, and fighter coordinating in whispers. "
+                        "Include a trap with a clear trigger, a risky skill check moment, and "
+                        "a twist that forces a fast choice."
                     ),
                 },
                 "source_pack": (
-                    "Key concepts: portfolio constraints, factor tilts, exclusion costs, "
-                    "greenwashing, fiduciary duty, stranded assets, risk-adjusted returns."
+                    "Key concepts: pressure plates, arcane wards, time limit, silent signals, "
+                    "unexpected guardian."
                 ),
             },
             {
-                # Tests: Understanding counterintuitive long-run effects in housing
-                # markets. Reveals if AI can reason about dynamic equilibria.
-                "title": "Short-Term Rental Bans",
+                "title": "Campfire Oath",
                 "prompts": {
-                    "Essay": (
-                        "Argue why banning short-term rentals (like Airbnb) may hurt "
-                        "renters in the long run, even if rents fall initially. "
-                        "Address the strongest counterarguments about housing supply "
-                        "and neighborhood character."
+                    "Monologue": (
+                        "Write a first-person monologue (500-700 words) from a paladin at a "
+                        "campfire after a failed rescue. Reveal backstory, a renewed vow, and "
+                        "a hint of inner corruption without naming it outright."
                     ),
                 },
                 "source_pack": (
-                    "Key concepts: housing supply elasticity, investment incentives, "
-                    "property rights, neighborhood effects, hotel industry competition, "
-                    "dynamic vs static analysis, unintended consequences."
+                    "Key concepts: oathbound duty, guilt, temptation, mercy versus justice, "
+                    "party trust."
                 ),
             },
         ],

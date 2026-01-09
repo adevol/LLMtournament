@@ -8,6 +8,7 @@ If you are building:
 - Legal, finance, or compliance workflows
 - Creative writing or editorial systems
 - Domain-specific chatbots or RAG pipelines
+- Cost-constrained production systems
 
 ...then global rankings are, at best, **weak priors** - and at worst, actively misleading.
 

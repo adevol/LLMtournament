@@ -98,8 +98,8 @@ class MatchService:
         version: str,
     ) -> MatchResult:
         """Load essays and run judged match using configured method."""
-        essay_a = await self.store.files.load_essay(topic_slug, candidate_a.id, version)
-        essay_b = await self.store.files.load_essay(topic_slug, candidate_b.id, version)
+        essay_a = await self.store.load_essay(topic_slug, candidate_a.id, version)
+        essay_b = await self.store.load_essay(topic_slug, candidate_b.id, version)
 
         if self.config.ranking.judging_method == "parallel_majority":
             primary = self.config.ranking.primary_judges or self.config.judges
@@ -116,8 +116,8 @@ class MatchService:
                 primary,
                 subs,
                 self.config.ranking.audit_confidence_threshold,
-                self.config.token_caps.judge_tokens,
-                self.config.temperatures.judge,
+                self.config.judge_tokens,
+                self.config.judge_temp,
                 self.config.ranking.primary_judge_count,
                 self.config.ranking.sub_judge_count,
             )
@@ -130,8 +130,8 @@ class MatchService:
             candidate_b.id,
             rotation,
             self.config.ranking.audit_confidence_threshold,
-            self.config.token_caps.judge_tokens,
-            self.config.temperatures.judge,
+            self.config.judge_tokens,
+            self.config.judge_temp,
         )
 
     def _apply_result(
@@ -171,4 +171,4 @@ class MatchService:
             final_decision=result.final_decision,
             timestamp=result.timestamp,
         )
-        await self.store.db.save_match(topic_slug, match_record)
+        await self.store.save_match(topic_slug, match_record)

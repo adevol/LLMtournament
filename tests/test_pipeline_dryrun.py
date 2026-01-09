@@ -64,16 +64,16 @@ class TestPipelineDryRun:
             await pipeline.run()
 
             # Check v0 essays were created
-            v0_dir = store.files.v0_dir("test-topic")
+            v0_dir = store.topic_dir("test-topic") / "v0"
             assert (v0_dir / "test__writer-a.md").exists()
             assert (v0_dir / "test__writer-b.md").exists()
 
             # Check ranking outputs
-            ranking_dir = store.files.ranking_dir("test-topic")
+            ranking_dir = store.topic_dir("test-topic") / "ranking"
             assert (ranking_dir / "leaderboard.csv").exists()
             assert (ranking_dir / "leaderboard.md").exists()
 
-            await store.close()
+            store.close_sync()
 
     async def test_run_full_mode(self, minimal_config_full_mode):
         """Test pipeline runs in full mode (with critique and revision)."""
@@ -87,35 +87,37 @@ class TestPipelineDryRun:
             await pipeline.run()
 
             # Check v0 essays
-            v0_dir = store.files.v0_dir("test-topic")
+            v0_dir = store.topic_dir("test-topic") / "v0"
             assert (v0_dir / "test__writer-a.md").exists()
 
             # Check feedback was created
-            feedback_dir = store.files.feedback_dir("test-topic")
+            feedback_dir = store.topic_dir("test-topic") / "feedback"
             assert (feedback_dir / "test__writer-a__test__critic-a.md").exists()
 
             # Check v1 essays
-            v1_dir = store.files.v1_dir("test-topic")
+            v1_dir = store.topic_dir("test-topic") / "v1"
             assert (v1_dir / "test__writer-a__test__critic-a.md").exists()
 
-            await store.close()
+            store.close_sync()
 
     async def test_run_with_limits(self, minimal_config):
-        """Test pipeline respects writer/critic limits."""
+        """Test pipeline runs with limited config."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config.output_dir = tmpdir
+            # Limit writers in config directly
+            minimal_config.writers = [minimal_config.writers[0]]
             client = FakeLLMClient(seed=42)
             store = TournamentStore(minimal_config, run_id="test_run")
 
-            pipeline = TournamentPipeline(minimal_config, client, store, max_writers=1)
+            pipeline = TournamentPipeline(minimal_config, client, store)
             await pipeline.run()
 
             # Only one writer should have essay
-            v0_dir = store.files.v0_dir("test-topic")
+            v0_dir = store.topic_dir("test-topic") / "v0"
             essays = list(v0_dir.glob("*.md"))
             assert len(essays) == 1
 
-            await store.close()
+            store.close_sync()
 
     async def test_metadata_saved(self, minimal_config):
         """Test run metadata is saved."""
@@ -127,7 +129,7 @@ class TestPipelineDryRun:
             assert (store.base_dir / "config_snapshot.yaml").exists()
             assert (store.base_dir / "run_metadata.json").exists()
 
-            await store.close()
+            store.close_sync()
 
     async def test_matches_jsonl_created(self, minimal_config):
         """Test matches JSONL is created during ranking."""
@@ -139,7 +141,7 @@ class TestPipelineDryRun:
             pipeline = TournamentPipeline(minimal_config, client, store)
             await pipeline.run()
 
-            jsonl_path = store.files.ranking_dir("test-topic") / "matches.jsonl"
+            jsonl_path = store.topic_dir("test-topic") / "ranking" / "matches.jsonl"
             assert jsonl_path.exists()
 
             # Check content is valid JSONL
@@ -151,7 +153,7 @@ class TestPipelineDryRun:
                 assert "winner" in data
                 assert "essay_a_id" in data
 
-            await store.close()
+            store.close_sync()
 
     async def test_convenience_function(self, minimal_config):
         """Test run_tournament convenience function."""
@@ -163,13 +165,12 @@ class TestPipelineDryRun:
                 config=minimal_config,
                 client=client,
                 run_id="conv_test",
-                max_topics=1,
             )
 
             assert store.run_id == "conv_test"
             assert (store.base_dir / "test-topic" / "ranking" / "leaderboard.md").exists()
 
-            await store.close()
+            store.close_sync()
 
 
 class TestEssayContent:
@@ -185,10 +186,10 @@ class TestEssayContent:
             pipeline = TournamentPipeline(minimal_config, client, store)
             await pipeline.run()
 
-            essay = await store.files.load_essay("test-topic", "test__writer-a", "v0")
+            essay = await store.load_essay("test-topic", "test__writer-a", "v0")
             assert "## Essay" in essay
 
-            await store.close()
+            store.close_sync()
 
 
 class TestTrueSkillRanking:
@@ -206,12 +207,12 @@ class TestTrueSkillRanking:
             await pipeline.run()
 
             # Check ranking outputs exist
-            ranking_dir = store.files.ranking_dir("test-topic")
+            ranking_dir = store.topic_dir("test-topic") / "ranking"
             assert (ranking_dir / "leaderboard.csv").exists()
             assert (ranking_dir / "leaderboard.md").exists()
 
             # Check leaderboard from DB
-            leaderboard = await store.db.get_leaderboard("test-topic")
+            leaderboard = await store.get_leaderboard("test-topic")
             assert len(leaderboard) > 0
 
-            await store.close()
+            store.close_sync()

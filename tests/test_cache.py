@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from llm_tournament.services.llm.client import CacheDB, FakeLLMClient
+from llm_tournament.services.llm.client import CacheDB, FakeLLMClient, LLMResponse
 
 
 class TestCacheDB:
@@ -22,21 +22,45 @@ class TestCacheDB:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = CacheDB(Path(tmpdir) / "cache.duckdb")
 
-            await cache.set("test_key", "test_model", "test_response")
+            response = LLMResponse(
+                content="test_response",
+                prompt_tokens=10,
+                completion_tokens=5,
+                total_tokens=15,
+            )
+            await cache.set("test_key", "test_model", response)
             result = await cache.get("test_key")
 
-            assert result == "test_response"
+            assert result is not None
+            assert result.content == "test_response"
+            assert result.prompt_tokens == 10
+            assert result.completion_tokens == 5
+            assert result.total_tokens == 15
 
     async def test_cache_overwrite(self):
         """Test overwriting cache values."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = CacheDB(Path(tmpdir) / "cache.duckdb")
 
-            await cache.set("key", "model", "response1")
-            await cache.set("key", "model", "response2")
+            response1 = LLMResponse(
+                content="response1",
+                prompt_tokens=10,
+                completion_tokens=5,
+                total_tokens=15,
+            )
+            response2 = LLMResponse(
+                content="response2",
+                prompt_tokens=20,
+                completion_tokens=10,
+                total_tokens=30,
+            )
+            await cache.set("key", "model", response1)
+            await cache.set("key", "model", response2)
             result = await cache.get("key")
 
-            assert result == "response2"
+            assert result is not None
+            assert result.content == "response2"
+            assert result.total_tokens == 30
 
     async def test_cache_creates_directory(self):
         """Test cache creates parent directory."""
@@ -45,7 +69,13 @@ class TestCacheDB:
             cache = CacheDB(cache_path)
 
             assert cache_path.parent.exists()
-            await cache.set("key", "model", "response")
+            response = LLMResponse(
+                content="response",
+                prompt_tokens=10,
+                completion_tokens=5,
+                total_tokens=15,
+            )
+            await cache.set("key", "model", response)
 
 
 class TestFakeLLMClient:
@@ -61,9 +91,11 @@ class TestFakeLLMClient:
         result1 = await client1.complete("test", messages, 100, 0.7)
         result2 = await client2.complete("test", messages, 100, 0.7)
 
-        # Both should produce valid JSON with same structure
-        assert "winner" in result1
-        assert "winner" in result2
+        # Both should produce valid LLMResponse with JSON content
+        assert isinstance(result1, LLMResponse)
+        assert isinstance(result2, LLMResponse)
+        assert "winner" in result1.content
+        assert "winner" in result2.content
 
     async def test_tracks_call_count(self):
         """Test fake client tracks call count."""
@@ -83,9 +115,12 @@ class TestFakeLLMClient:
 
         result = await client.complete("test", messages, 100, 0.7)
 
-        # Simple essay response contains model name and story content
-        assert "test" in result
-        assert "characters" in result
+        # LLMResponse should contain model name and story content
+        assert isinstance(result, LLMResponse)
+        assert "test" in result.content
+        assert "characters" in result.content
+        assert result.prompt_tokens > 0
+        assert result.completion_tokens > 0
 
     async def test_judgment_response_is_valid_json(self):
         """Test fake judgment is valid JSON."""
@@ -93,7 +128,8 @@ class TestFakeLLMClient:
         messages = [{"role": "user", "content": "compare winner"}]
 
         result = await client.complete("test", messages, 100, 0.7)
-        data = json.loads(result)
+        assert isinstance(result, LLMResponse)
+        data = json.loads(result.content)
 
         assert data["winner"] in ["A", "B"]
         assert 0 <= data["confidence"] <= 1

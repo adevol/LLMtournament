@@ -178,7 +178,8 @@ async def _request_judgment(
         Raw response string from the model.
     """
     messages = _build_judge_messages(context, strict)
-    return await client.complete(judge_model, messages, context.max_tokens, context.temperature)
+    response = await client.complete(judge_model, messages, context.max_tokens, context.temperature)
+    return response.content
 
 
 def _parse_with_repair(response: str) -> JudgeResult:
@@ -319,6 +320,25 @@ def _average_confidence(results: list[JudgeResult]) -> float:
     return sum(r.confidence for r in results) / len(results)
 
 
+def _clamp_confidence(value: float) -> float:
+    """Clamp confidence to [0.0, 1.0] to keep math stable."""
+    return max(0.0, min(1.0, value))
+
+
+def _aggregate_confidence(results: list[JudgeResult], winner: str) -> float:
+    """Aggregate confidence as support for the chosen winner.
+
+    Converts each judge vote into a probability for the winner:
+    - If judge voted for the winner, use confidence.
+    - If judge voted against, use (1 - confidence).
+    """
+    supports = []
+    for r in results:
+        conf = _clamp_confidence(r.confidence)
+        supports.append(conf if r.winner == winner else 1.0 - conf)
+    return sum(supports) / len(supports)
+
+
 def _summarize_votes(
     results: list[JudgeResult],
 ) -> tuple[list[str], str, float, JudgeResult]:
@@ -337,7 +357,7 @@ def _summarize_votes(
         raise ValueError("At least one judge result is required")
     votes = [r.winner for r in results]
     winner = "A" if votes.count("A") > votes.count("B") else "B"
-    avg_confidence = _average_confidence(results)
+    avg_confidence = _aggregate_confidence(results, winner)
     winning_result = next(r for r in results if r.winner == winner)
     return votes, winner, avg_confidence, winning_result
 
