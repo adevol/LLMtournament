@@ -115,6 +115,50 @@ async def main() -> None:
                     "dynamic vs static analysis, unintended consequences."
                 ),
             },
+            {
+                "title": "The Lantern of Hollowmere",
+                "prompts": {
+                    "Story": (
+                        "Write a short story (900-1200 words) set in a DnD fantasy world. "
+                        "Center on a traveling party arriving at a fogbound fishing town "
+                        "and the discovery of a cursed lantern. Include dialogue, a moral "
+                        "choice, and a closing hook for the next session."
+                    ),
+                },
+                "source_pack": (
+                    "Key concepts: coastal village, ancient bargain, wary locals, "
+                    "supernatural fog, price of salvation."
+                ),
+            },
+            {
+                "title": "The Obsidian Vault Heist",
+                "prompts": {
+                    "Scene": (
+                        "Write a tense infiltration scene (600-900 words) in a DnD dungeon. "
+                        "Show the rogue, cleric, wizard, and fighter coordinating in whispers. "
+                        "Include a trap with a clear trigger, a risky skill check moment, and "
+                        "a twist that forces a fast choice."
+                    ),
+                },
+                "source_pack": (
+                    "Key concepts: pressure plates, arcane wards, time limit, silent signals, "
+                    "unexpected guardian."
+                ),
+            },
+            {
+                "title": "Campfire Oath",
+                "prompts": {
+                    "Monologue": (
+                        "Write a first-person monologue (500-700 words) from a paladin at a "
+                        "campfire after a failed rescue. Reveal backstory, a renewed vow, and "
+                        "a hint of inner corruption without naming it outright."
+                    ),
+                },
+                "source_pack": (
+                    "Key concepts: oathbound duty, guilt, temptation, mercy versus justice, "
+                    "party trust."
+                ),
+            },
         ],
         output_dir=str(Path("./runs")),
         simple_mode=True,  # v0 only for speed
