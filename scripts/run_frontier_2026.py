@@ -118,12 +118,10 @@ async def main() -> None:
         output_dir=str(Path("./runs")),
         simple_mode=True,  # v0 only for speed
         seed=2026,
-        token_caps={
-            "writer_tokens": 3500,
-            "critic_tokens": 1500,
-            "revision_tokens": 3500,
-            "judge_tokens": 2000,
-        },
+        writer_tokens=3500,
+        critic_tokens=1500,
+        revision_tokens=3500,
+        judge_tokens=2000,
         ranking={
             "rounds": 5,  # optional, auto-calculated as ceil(log2(N)) + 1 for stable rankings
             "algorithm": "trueskill",
@@ -151,7 +149,7 @@ async def main() -> None:
     )
 
     try:
-        pipeline = TournamentPipeline(config, client, store, max_concurrency=3)
+        pipeline = TournamentPipeline(config, client, store, max_concurrency=6)
         await pipeline.run()
 
         # Log costs
