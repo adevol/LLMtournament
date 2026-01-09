@@ -74,6 +74,11 @@ class LLMClient(ABC):
             LLMResponse with content and usage data.
         """
 
+    @property
+    @abstractmethod
+    def total_cost(self) -> float:
+        """Return total cost of all API calls made by this client."""
+
     async def close(self) -> None:  # noqa: B027
         """Close any resources. Override if needed."""
 
@@ -89,6 +94,11 @@ class FakeLLMClient(LLMClient):
         """
         self.seed = seed
         self.call_count = 0
+
+    @property
+    def total_cost(self) -> float:
+        """Fake client has zero cost."""
+        return 0.0
 
     async def complete(
         self,
@@ -287,6 +297,12 @@ class OpenRouterClient(LLMClient):
         self.use_cache = use_cache and cache_db is not None
         self.cost_tracker = cost_tracker
         self.client = httpx.AsyncClient(timeout=120.0)
+        self._total_cost = 0.0
+
+    @property
+    def total_cost(self) -> float:
+        """Return total accumulated cost."""
+        return self._total_cost
 
     async def complete(
         self,
@@ -321,13 +337,14 @@ class OpenRouterClient(LLMClient):
 
         # Record cost if tracker configured
         if self.cost_tracker:
-            await self.cost_tracker.record_call(
+            call_cost = await self.cost_tracker.record_call(
                 model,
                 response.prompt_tokens,
                 response.completion_tokens,
                 response.total_tokens,
                 role="api",
             )
+            self._total_cost += call_cost
 
         # Store in cache
         if self.use_cache and self.cache_db:
@@ -411,6 +428,7 @@ def create_client(
     use_cache: bool = True,
     dry_run: bool = False,
     seed: int = 42,
+    cost_tracker: CostTracker | None = None,
 ) -> LLMClient:
     """Create appropriate LLM client based on settings.
 
@@ -418,8 +436,9 @@ def create_client(
         api_key: OpenRouter API key (required unless dry_run).
         cache_path: Path to cache database.
         use_cache: Whether to use caching.
-        dry_run: Use fake client instead of real API.
+        dry_run: If True, use fake client.
         seed: Random seed for fake client.
+        cost_tracker: Optional cost tracker.
 
     Returns:
         LLMClient instance.
@@ -432,5 +451,13 @@ def create_client(
         msg = "API key required for real API calls"
         raise ValueError(msg)
 
-    cache_db = CacheDB(cache_path) if cache_path else None
-    return OpenRouterClient(api_key, cache_db, use_cache)
+    cache_db = None
+    if cache_path:
+        cache_db = CacheDB(cache_path)
+
+    return OpenRouterClient(
+        api_key=api_key,
+        cache_db=cache_db,
+        use_cache=use_cache,
+        cost_tracker=cost_tracker,
+    )

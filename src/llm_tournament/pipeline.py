@@ -210,4 +210,8 @@ async def run_tournament(
     store = TournamentStore(config, run_id)
     pipeline = TournamentPipeline(config, client, store, max_concurrency)
     await pipeline.run()
+
+    if client.total_cost > 0:
+        logger.info("cost_summary", total_usd=f"${client.total_cost:.4f}")
+
     return store

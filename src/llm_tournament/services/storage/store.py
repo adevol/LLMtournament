@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import gc
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -377,7 +378,5 @@ class TournamentStore:
         if self._engine:
             self._engine.dispose()
             self._engine = None
-        # Force garbage collection to release file handles on Windows
-        import gc
 
         gc.collect()

@@ -15,7 +15,7 @@ The architecture consists of:
 
 ```mermaid
 classDiagram
-    direction TB
+    direction LR
 
     %% ==================== CONFIGURATION ====================
     namespace Configuration {
@@ -149,6 +149,7 @@ classDiagram
             +initial_mu: float
             +initial_sigma: float
             -_ratings: dict~str, TrueSkillRating~
+            -_ratings: dict~str, TrueSkillRating~
             -_model: PlackettLuce
             +initialize(candidate_ids)
             +update(winner_id, loser_id, confidence)
@@ -245,6 +246,7 @@ classDiagram
     LLMClientABC <|-- OpenRouterClient
     LLMClientABC <|-- FakeLLMClient
     OpenRouterClient o-- CacheDB
+    OpenRouterClient o-- CostTracker
     PricingService o-- ModelPricing
     CostTracker --> PricingService
     CostTracker --> LLMCall
@@ -359,15 +361,15 @@ classDiagram
         }
     }
 
-    MatchService --> LLMClientABC
-    MatchService --> TournamentStore
+    %% MatchService --> LLMClientABC
+    %% MatchService --> TournamentStore
     MatchService --> RankingSystem
     MatchService --> JudgeRotation
     MatchService --> Candidate
-    SubmissionService --> LLMClientABC
-    SubmissionService --> TournamentStore
-    AnalysisService --> LLMClientABC
-    AnalysisService --> TournamentStore
+    %% SubmissionService --> LLMClientABC
+    %%SubmissionService --> TournamentStore
+    %% AnalysisService --> LLMClientABC
+   %% AnalysisService --> TournamentStore
 
     %% ==================== PIPELINE ====================
     namespace Pipeline {

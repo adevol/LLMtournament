@@ -8,8 +8,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from llm_tournament.core.config import TournamentConfig
-from llm_tournament.pipeline import run_tournament
-from llm_tournament.services.llm import create_client
+from llm_tournament.pipeline import TournamentPipeline
+from llm_tournament.services.llm import CostTracker, PricingService, create_client
+from llm_tournament.services.storage import TournamentStore
 
 load_dotenv()
 
@@ -134,14 +135,31 @@ async def main() -> None:
         api_key=api_key,
     )
 
+    store = TournamentStore(config)
+    print(f"Initialized tournament run: {store.run_id}")
+
+    # Cost Tracking Setup
+    pricing = PricingService(api_key)
+    await pricing.refresh()
+    cost_tracker = CostTracker(pricing, store._engine)
+
     client = create_client(
         api_key=api_key,
         cache_path=Path("./runs/.cache/llm_cache.duckdb"),
         use_cache=True,
+        cost_tracker=cost_tracker,
     )
 
     try:
-        store = await run_tournament(config, client, max_concurrency=3)
+        pipeline = TournamentPipeline(config, client, store, max_concurrency=3)
+        await pipeline.run()
+
+        # Log costs
+        total_cost = await cost_tracker.get_total_cost()
+        print(f"\nTotal Cost: ${total_cost:.4f}")
+        breakdown = await cost_tracker.get_cost_breakdown()
+        print("Cost Breakdown:", breakdown)
+
         print(f"Tournament complete! Results in: {store.base_dir}")
     finally:
         await client.close()
