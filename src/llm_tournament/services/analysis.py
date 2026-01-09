@@ -54,9 +54,10 @@ def build_match_summary(match: dict, essay_id: str) -> str:
     if not isinstance(reasons, list):
         reasons = [str(reasons)]
 
+    edge_label = "Edge" if won else "Weakness"
     return (
         f"vs {opponent[:20]}: {'WON' if won else 'LOST'}\n"
-        f"Edge: {match['winner_edge']}\n"
+        f"{edge_label}: {match['winner_edge']}\n"
         f"Reasons: {', '.join(reasons[:2])}"
     )
 
