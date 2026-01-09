@@ -22,6 +22,7 @@ from tenacity import (
 )
 
 from llm_tournament.core.config import hash_messages
+from llm_tournament.services.llm.cost_tracker import CostTracker
 
 logger = structlog.get_logger()
 
@@ -271,6 +272,7 @@ class OpenRouterClient(LLMClient):
         api_key: str,
         cache_db: CacheDB | None = None,
         use_cache: bool = True,
+        cost_tracker: CostTracker | None = None,
     ) -> None:
         """Initialize OpenRouter client.
 
@@ -278,10 +280,12 @@ class OpenRouterClient(LLMClient):
             api_key: OpenRouter API key.
             cache_db: Optional cache database.
             use_cache: Whether to use caching.
+            cost_tracker: Optional cost tracker for recording API costs.
         """
         self.api_key = api_key
         self.cache_db = cache_db
         self.use_cache = use_cache and cache_db is not None
+        self.cost_tracker = cost_tracker
         self.client = httpx.AsyncClient(timeout=120.0)
 
     async def complete(
@@ -314,6 +318,16 @@ class OpenRouterClient(LLMClient):
 
         # Make API call
         response = await self._call_api(model, messages, max_tokens, temperature)
+
+        # Record cost if tracker configured
+        if self.cost_tracker:
+            await self.cost_tracker.record_call(
+                model,
+                response.prompt_tokens,
+                response.completion_tokens,
+                response.total_tokens,
+                role="api",
+            )
 
         # Store in cache
         if self.use_cache and self.cache_db:

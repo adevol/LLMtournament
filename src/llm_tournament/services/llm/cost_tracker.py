@@ -10,7 +10,6 @@ from sqlmodel import Session, func, select
 
 from llm_tournament.models import LLMCall
 
-from .client import LLMResponse
 from .pricing import PricingService
 
 if TYPE_CHECKING:
@@ -41,7 +40,9 @@ class CostTracker:
     async def record_call(
         self,
         model: str,
-        response: LLMResponse,
+        prompt_tokens: int,
+        completion_tokens: int,
+        total_tokens: int,
         role: str,
         topic_slug: str | None = None,
     ) -> float:
@@ -49,7 +50,9 @@ class CostTracker:
 
         Args:
             model: OpenRouter model ID.
-            response: LLMResponse containing usage data.
+            prompt_tokens: Number of prompt tokens.
+            completion_tokens: Number of completion tokens.
+            total_tokens: Total tokens used.
             role: Call role ("writer", "judge", "critic", "analysis").
             topic_slug: Optional topic context.
 
@@ -57,21 +60,18 @@ class CostTracker:
             Computed cost in USD.
         """
         # Compute cost
-        cost_usd = self._pricing.compute_cost(
-            model, response.prompt_tokens, response.completion_tokens
-        )
+        cost_usd = self._pricing.compute_cost(model, prompt_tokens, completion_tokens)
         if cost_usd is None:
             logger.warning("cost_unknown_model", model=model)
             cost_usd = 0.0
 
-        # Create call record
         call = LLMCall(
             model=model,
             role=role,
             topic_slug=topic_slug,
-            prompt_tokens=response.prompt_tokens,
-            completion_tokens=response.completion_tokens,
-            total_tokens=response.total_tokens,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
             cost_usd=cost_usd,
         )
 
@@ -87,7 +87,7 @@ class CostTracker:
             model=model,
             role=role,
             cost_usd=cost_usd,
-            tokens=response.total_tokens,
+            tokens=total_tokens,
         )
         return cost_usd
 
