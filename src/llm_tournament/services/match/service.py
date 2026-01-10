@@ -120,6 +120,7 @@ class MatchService:
                 self.config.judge_temp,
                 self.config.ranking.primary_judge_count,
                 self.config.ranking.sub_judge_count,
+                self.config.judge_system_prompt,
             )
 
         return await run_match_with_audit(
@@ -132,6 +133,7 @@ class MatchService:
             self.config.ranking.audit_confidence_threshold,
             self.config.judge_tokens,
             self.config.judge_temp,
+            self.config.judge_system_prompt,
         )
 
     def _apply_result(
