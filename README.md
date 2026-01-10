@@ -173,6 +173,39 @@ See [`config.yaml`](config.yaml) for a complete example. Key settings include:
 - **token_caps**: Per-role token limits for cost control
 - **temperatures**: Sampling temperatures for each role
 
+### Custom System Prompts
+
+You can customize system prompts at multiple levels:
+
+**Tournament-wide defaults** (in `TournamentConfig`):
+```python
+config = TournamentConfig(
+    writers=["openai/gpt-4", "anthropic/claude-3"],
+    writer_system_prompt="You are a technical writer...",  # Default for all writers
+    judge_system_prompt="You are a busy researcher...",    # Custom judge persona
+    ...
+)
+```
+
+**Per-writer prompts** (using `WriterConfig`):
+```python
+from llm_tournament.core.config import TournamentConfig, WriterConfig
+
+config = TournamentConfig(
+    writers=[
+        "openai/gpt-4",  # Uses tournament-wide default or prompts.yaml
+        WriterConfig(
+            model_id="openai/gpt-4",
+            system_prompt="You are a pirate...",  # Custom prompt for this writer
+            name="gpt4-pirate",                   # Optional custom name for slug
+        ),
+    ],
+    ...
+)
+```
+
+This enables **prompt engineering comparisons** - test different system prompts with the same model to find optimal instructions for your use case.
+
 ## Output Structure
 
 ```

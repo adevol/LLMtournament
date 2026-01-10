@@ -20,7 +20,7 @@ classDiagram
     %% ==================== CONFIGURATION ====================
     namespace Configuration {
         class TournamentConfig {
-            +writers: list~str~
+            +writers: list~str | WriterConfig~
             +critics: list~str~
             +judges: list~str~
             +topics: list~TopicConfig~
@@ -34,6 +34,8 @@ classDiagram
             +judge_temp: float
             +analysis_top_k: int
             +ranking: RankingConfig
+            +writer_system_prompt: str | None
+            +judge_system_prompt: str | None
             +simple_mode: bool
             +seed: int
             +slug_max_length: int
@@ -41,6 +43,16 @@ classDiagram
             +api_key: str | None
             +get_slug_model()
             +get_api_key()
+            +get_writer_slug(writer)
+            +get_writer_model_id(writer)
+            +get_writer_system_prompt(writer)
+        }
+
+        class WriterConfig {
+            +model_id: str
+            +system_prompt: str | None
+            +name: str | None
+            +get_slug()
         }
 
         class TopicConfig {
@@ -69,6 +81,7 @@ classDiagram
 
     TournamentConfig *-- TopicConfig
     TournamentConfig *-- RankingConfig
+    TournamentConfig o-- WriterConfig
 
     %% ==================== MODELS (SQLModel) ====================
     namespace Models {
@@ -305,6 +318,7 @@ classDiagram
             +max_tokens: int
             +temperature: float
             +audit_threshold: float | None
+            +custom_judge_system_prompt: str | None
         }
 
         class MatchResult {
@@ -401,7 +415,7 @@ classDiagram
 
 | Module | Classes |
 |--------|---------|
-| `core/config.py` | TournamentConfig, TopicConfig, RankingConfig |
+| `core/config.py` | TournamentConfig, TopicConfig, RankingConfig, WriterConfig |
 | `models/` | Match, Rating, LLMCall |
 | `ranking/` | RankingSystem (protocol), EloSystem, EloRating, TrueSkillSystem, TrueSkillRating |
 | `services/llm/` | LLMResponse, LLMClient, OpenRouterClient, FakeLLMClient, CacheDB, PricingService, ModelPricing, CostTracker |
