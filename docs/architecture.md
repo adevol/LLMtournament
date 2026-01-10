@@ -156,6 +156,7 @@ Encapsulates business logic into distinct domains:
 ### 5. Prompts (`src/llm_tournament/prompts/`)
 - Centralized prompt templates in `prompts.yaml`.
 - Loaded at runtime for generation, critique, revision, and judging.
+- Can be overridden per-tournament (`writer_system_prompt`, `judge_system_prompt`) or per-writer (`WriterConfig.system_prompt`).
 
 ## Directory Structure
 

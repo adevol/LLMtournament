@@ -53,8 +53,8 @@ class TournamentPipeline:
 
         self.judges = config.judges
 
-        # Slugify model IDs
-        self.writer_slugs = [self.config.get_slug_model(w) for w in self.config.writers]
+        # Slugify model IDs (supports both string and WriterConfig)
+        self.writer_slugs = [self.config.get_writer_slug(w) for w in self.config.writers]
         self.critic_slugs = [self.config.get_slug_model(c) for c in self.config.critics]
 
         # Initialize services

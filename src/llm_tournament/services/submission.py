@@ -4,7 +4,7 @@ import asyncio
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig
+from llm_tournament.core.config import TopicConfig, TournamentConfig, WriterConfig
 from llm_tournament.prompts import (
     critic_system_prompt,
     critic_user_prompt,
@@ -34,27 +34,43 @@ class SubmissionService:
         self.store = store
         self._semaphore = semaphore
 
-    async def run_generation_batch(self, topic, writers: list[str]) -> None:
-        writer_slugs = [self.config.get_slug_model(w) for w in writers]
-
+    async def run_generation_batch(
+        self, topic: TopicConfig, writers: list[str | WriterConfig]
+    ) -> None:
+        """Generate essays for all writers on a topic."""
         tasks = []
-        for writer_id, writer_slug in zip(writers, writer_slugs, strict=True):
-            tasks.append(self._generate_one(topic, writer_id, writer_slug))
+        for writer in writers:
+            writer_slug = self.config.get_writer_slug(writer)
+            writer_model_id = self.config.get_writer_model_id(writer)
+            system_prompt = self.config.get_writer_system_prompt(writer)
+            tasks.append(self._generate_one(topic, writer_model_id, writer_slug, system_prompt))
         await asyncio.gather(*tasks)
 
-    async def _generate_one(self, topic, writer_id: str, writer_slug: str) -> None:
+    async def _generate_one(
+        self,
+        topic: TopicConfig,
+        writer_model_id: str,
+        writer_slug: str,
+        system_prompt: str | None = None,
+    ) -> None:
+        """Generate essay sections for a single writer."""
         prompts_map = writer_user_prompt(topic)
         sections: dict[str, str] = {}
+
+        # Priority: per-writer override > config default > prompts.yaml
+        effective_system_prompt = (
+            system_prompt or self.config.writer_system_prompt or writer_system_prompt()
+        )
 
         async def generate_section(genre: str, prompt: str) -> None:
             async with self._semaphore:
                 logger.debug("generating_section", writer=writer_slug, genre=genre)
                 messages = [
-                    {"role": "system", "content": writer_system_prompt()},
+                    {"role": "system", "content": effective_system_prompt},
                     {"role": "user", "content": prompt},
                 ]
                 content = await self.client.complete(
-                    writer_id,
+                    writer_model_id,
                     messages,
                     self.config.writer_tokens,
                     self.config.writer_temp,
@@ -74,8 +90,11 @@ class SubmissionService:
         full_essay = "\n\n".join(full_text_parts)
         await self.store.save_essay(topic.slug, writer_slug, full_essay, "v0")
 
-    async def run_critique_batch(self, topic, writers: list[str], critics: list[str]) -> None:
-        writer_slugs = [self.config.get_slug_model(w) for w in writers]
+    async def run_critique_batch(
+        self, topic: TopicConfig, writers: list[str | WriterConfig], critics: list[str]
+    ) -> None:
+        """Generate critiques for all writer-critic combinations."""
+        writer_slugs = [self.config.get_writer_slug(w) for w in writers]
         critic_slugs = [self.config.get_slug_model(c) for c in critics]
 
         tasks = []
@@ -102,18 +121,23 @@ class SubmissionService:
             )
             await self.store.save_feedback(topic_slug, writer_slug, critic_slug, feedback.content)
 
-    async def run_revision_batch(self, topic, writers: list[str], critics: list[str]) -> None:
-        writer_slugs = [self.config.get_slug_model(w) for w in writers]
-        critic_slugs = [self.config.get_slug_model(c) for c in critics]
-
+    async def run_revision_batch(
+        self, topic: TopicConfig, writers: list[str | WriterConfig], critics: list[str]
+    ) -> None:
+        """Generate revisions for all writer-critic combinations."""
         tasks = []
-        for writer_id, writer_slug in zip(writers, writer_slugs, strict=True):
-            for critic_slug in critic_slugs:
-                tasks.append(self._revise_one(topic.slug, writer_id, writer_slug, critic_slug))
+        for writer in writers:
+            writer_slug = self.config.get_writer_slug(writer)
+            writer_model_id = self.config.get_writer_model_id(writer)
+            for critic in critics:
+                critic_slug = self.config.get_slug_model(critic)
+                tasks.append(
+                    self._revise_one(topic.slug, writer_model_id, writer_slug, critic_slug)
+                )
         await asyncio.gather(*tasks)
 
     async def _revise_one(
-        self, topic_slug: str, writer_id: str, writer_slug: str, critic_slug: str
+        self, topic_slug: str, writer_model_id: str, writer_slug: str, critic_slug: str
     ) -> None:
         async with self._semaphore:
             logger.debug("generating_revision", writer=writer_slug, critic=critic_slug)
@@ -127,7 +151,7 @@ class SubmissionService:
                 },
             ]
             revised = await self.client.complete(
-                writer_id,
+                writer_model_id,
                 messages,
                 self.config.revision_tokens,
                 self.config.revision_temp,

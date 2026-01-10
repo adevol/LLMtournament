@@ -47,6 +47,21 @@ SUB_JUDGES = [
 # All judges (for fallback/rotation in audit mode)
 JUDGES = PRIMARY_JUDGES + SUB_JUDGES
 
+# Custom writer system prompt for fiction/DnD writing
+WRITER_SYSTEM_PROMPT = """\
+You are a skilled fantasy fiction writer creating immersive DnD-style narratives.
+Your writing should:
+- Use vivid, sensory descriptions that bring scenes to life
+- Create authentic character voices through dialogue
+- Balance action with character moments
+- Maintain tension and pacing appropriate to the scene type
+- Include subtle worldbuilding details without exposition dumps
+- Leave room for player agency and future story hooks
+
+Write in third person past tense unless specified otherwise.
+Do not include meta-commentary or author notes.
+"""
+
 
 async def main() -> None:
     """Run tournament with frontier models."""
@@ -60,6 +75,7 @@ async def main() -> None:
         writers=WRITERS,
         critics=CRITICS,
         judges=JUDGES,
+        writer_system_prompt=WRITER_SYSTEM_PROMPT,
         # Topics designed to test nuanced reasoning:
         # - Arguing against popular positions while steel-manning opponents
         # - Understanding second-order economic effects

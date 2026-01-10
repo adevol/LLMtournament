@@ -154,8 +154,9 @@ def _build_judge_messages(context: MatchContext, strict: bool) -> list[dict[str,
         List of message dicts.
     """
     prompt = judge_strict_retry_prompt if strict else judge_user_prompt
+    system_prompt = context.custom_judge_system_prompt or judge_system_prompt()
     return [
-        {"role": "system", "content": judge_system_prompt()},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt(context.essay_a, context.essay_b)},
     ]
 
@@ -231,6 +232,7 @@ class MatchContext:
         max_tokens: Max tokens for judge responses.
         temperature: Sampling temperature.
         audit_threshold: Confidence threshold for audit/expansion.
+        custom_judge_system_prompt: Optional override for judge system prompt.
     """
 
     essay_a_id: str
@@ -240,6 +242,7 @@ class MatchContext:
     max_tokens: int
     temperature: float
     audit_threshold: float | None = None
+    custom_judge_system_prompt: str | None = None
 
 
 @dataclass
@@ -470,6 +473,7 @@ async def run_match_with_audit(
     audit_threshold: float,
     max_tokens: int,
     temperature: float,
+    custom_judge_system_prompt: str | None = None,
 ) -> MatchResult:
     """Run a match with potential audit judges.
 
@@ -483,6 +487,7 @@ async def run_match_with_audit(
         audit_threshold: Confidence threshold for audit.
         max_tokens: Max tokens.
         temperature: Temperature.
+        custom_judge_system_prompt: Optional override for judge system prompt.
 
     Returns:
         Final MatchResult.
@@ -500,6 +505,7 @@ async def run_match_with_audit(
         max_tokens=max_tokens,
         temperature=temperature,
         audit_threshold=audit_threshold,
+        custom_judge_system_prompt=custom_judge_system_prompt,
     )
     # Primary judgment
     primary_judge = rotation.next_judge()
@@ -633,6 +639,7 @@ async def run_match_parallel_majority(
     temperature: float,
     primary_judge_count: int = PRIMARY_JUDGE_COUNT,
     sub_judge_count: int = SUB_JUDGE_COUNT,
+    custom_judge_system_prompt: str | None = None,
 ) -> MatchResult:
     """Run match with parallel judges and majority voting.
 
@@ -649,6 +656,7 @@ async def run_match_parallel_majority(
         temperature: Sampling temperature.
         primary_judge_count: How many primary judges to use (default 3).
         sub_judge_count: How many sub-judges to add on low confidence (default 2).
+        custom_judge_system_prompt: Optional override for judge system prompt.
 
     Returns:
         MatchResult with majority decision.
@@ -664,6 +672,7 @@ async def run_match_parallel_majority(
         max_tokens=max_tokens,
         temperature=temperature,
         audit_threshold=confidence_threshold,
+        custom_judge_system_prompt=custom_judge_system_prompt,
     )
     judges_to_use = (
         primary_judges[:primary_judge_count]
