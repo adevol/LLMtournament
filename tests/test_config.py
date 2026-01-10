@@ -10,6 +10,7 @@ import yaml
 from llm_tournament.core.config import (
     TopicConfig,
     TournamentConfig,
+    WriterConfig,
     hash_messages,
     load_config,
     safe_id,
@@ -172,3 +173,139 @@ class TestHashMessages:
         hash2 = hash_messages(messages2, params)
 
         assert hash1 != hash2
+
+
+class TestWriterConfig:
+    """Tests for WriterConfig."""
+
+    def test_slug_from_model_id(self):
+        """Test slug generation from model_id only."""
+        writer = WriterConfig(model_id="openai/gpt-4")
+        assert writer.get_slug() == "openai__gpt-4"
+
+    def test_slug_with_custom_name(self):
+        """Test slug uses custom name when provided."""
+        writer = WriterConfig(
+            model_id="openai/gpt-4",
+            name="my-custom-writer",
+        )
+        assert writer.get_slug() == "my-custom-writer"
+
+    def test_slug_with_system_prompt_hash(self):
+        """Test slug includes hash when system_prompt is set."""
+        writer = WriterConfig(
+            model_id="openai/gpt-4",
+            system_prompt="You are a pirate.",
+        )
+        slug = writer.get_slug()
+        # Should have model_id + 6-char hash suffix
+        assert slug.startswith("openai__gpt-4_")
+        assert len(slug) == len("openai__gpt-4_") + 6
+
+    def test_different_prompts_different_slugs(self):
+        """Test different system prompts generate different slugs."""
+        writer1 = WriterConfig(
+            model_id="openai/gpt-4",
+            system_prompt="You are a pirate.",
+        )
+        writer2 = WriterConfig(
+            model_id="openai/gpt-4",
+            system_prompt="You are a ninja.",
+        )
+        assert writer1.get_slug() != writer2.get_slug()
+
+    def test_empty_model_id_validation(self):
+        """Test that empty model_id in WriterConfig is rejected."""
+        with pytest.raises(pydantic.ValidationError, match="cannot be empty"):
+            TournamentConfig(
+                writers=[WriterConfig(model_id="")],
+                critics=["model/b"],
+                judges=["model/c"],
+                topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+            )
+
+
+class TestTournamentConfigWriterHelpers:
+    """Tests for TournamentConfig writer helper methods."""
+
+    def test_get_writer_slug_string(self):
+        """Test get_writer_slug with string input."""
+        config = TournamentConfig(
+            writers=["openai/gpt-4"],
+            critics=["model/b"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+        assert config.get_writer_slug("openai/gpt-4") == "openai__gpt-4"
+
+    def test_get_writer_slug_writer_config(self):
+        """Test get_writer_slug with WriterConfig input."""
+        writer = WriterConfig(model_id="openai/gpt-4", name="custom")
+        config = TournamentConfig(
+            writers=[writer],
+            critics=["model/b"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+        assert config.get_writer_slug(writer) == "custom"
+
+    def test_get_writer_model_id_string(self):
+        """Test get_writer_model_id with string input."""
+        config = TournamentConfig(
+            writers=["openai/gpt-4"],
+            critics=["model/b"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+        assert config.get_writer_model_id("openai/gpt-4") == "openai/gpt-4"
+
+    def test_get_writer_model_id_writer_config(self):
+        """Test get_writer_model_id with WriterConfig input."""
+        writer = WriterConfig(model_id="openai/gpt-4")
+        config = TournamentConfig(
+            writers=[writer],
+            critics=["model/b"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+        assert config.get_writer_model_id(writer) == "openai/gpt-4"
+
+    def test_get_writer_system_prompt_string(self):
+        """Test get_writer_system_prompt returns None for string input."""
+        config = TournamentConfig(
+            writers=["openai/gpt-4"],
+            critics=["model/b"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+        assert config.get_writer_system_prompt("openai/gpt-4") is None
+
+    def test_get_writer_system_prompt_writer_config(self):
+        """Test get_writer_system_prompt returns prompt from WriterConfig."""
+        writer = WriterConfig(
+            model_id="openai/gpt-4",
+            system_prompt="You are a pirate.",
+        )
+        config = TournamentConfig(
+            writers=[writer],
+            critics=["model/b"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+        assert config.get_writer_system_prompt(writer) == "You are a pirate."
+
+    def test_mixed_writers_list(self):
+        """Test TournamentConfig accepts mixed string and WriterConfig list."""
+        writer_config = WriterConfig(
+            model_id="openai/gpt-4",
+            system_prompt="Custom prompt",
+        )
+        config = TournamentConfig(
+            writers=["anthropic/claude-3", writer_config],
+            critics=["model/b"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+        assert len(config.writers) == 2
+        assert isinstance(config.writers[0], str)
+        assert isinstance(config.writers[1], WriterConfig)
