@@ -52,6 +52,38 @@ class TopicConfig(BaseModel):
         return truncate_slug(slug, max_length)
 
 
+class WriterConfig(BaseModel):
+    """Configuration for a writer participant with optional custom system prompt.
+
+    Allows comparing different system prompts for the same model in tournaments.
+
+    Attributes:
+        model_id: The model identifier (e.g., "openai/gpt-4").
+        system_prompt: Optional custom system prompt. If None, uses the default.
+        name: Optional display name. If None, auto-generated from model_id + prompt hash.
+    """
+
+    model_id: str
+    system_prompt: str | None = None
+    name: str | None = None
+
+    def get_slug(self, max_length: int = DEFAULT_SLUG_MAX_LENGTH) -> str:
+        """Generate a unique slug for this writer config.
+
+        If name is provided, uses that. Otherwise, generates from model_id
+        plus a short hash of the system_prompt (if custom).
+        """
+        if self.name:
+            base = safe_id(self.name)
+        else:
+            base = safe_id(self.model_id)
+            if self.system_prompt:
+                # Append short hash for uniqueness
+                prompt_hash = hashlib.sha256(self.system_prompt.encode()).hexdigest()[:6]
+                base = f"{base}_{prompt_hash}"
+        return truncate_slug(base, max_length)
+
+
 class RankingConfig(BaseModel):
     """Ranking algorithm configuration.
 
@@ -88,8 +120,8 @@ class RankingConfig(BaseModel):
 class TournamentConfig(BaseModel):
     """Complete tournament configuration."""
 
-    # Model lists
-    writers: list[str] = Field(..., min_length=1)
+    # Model lists - writers can be strings or WriterConfig objects
+    writers: list[str | WriterConfig] = Field(..., min_length=1)
     critics: list[str] = Field(..., min_length=1)
     judges: list[str] = Field(..., min_length=1)
     topics: list[TopicConfig] = Field(..., min_length=1)
@@ -112,6 +144,10 @@ class TournamentConfig(BaseModel):
     # Ranking configuration (kept as nested - complex enough)
     ranking: RankingConfig = Field(default_factory=RankingConfig)
 
+    # Custom system prompts (None = use defaults from prompts.yaml)
+    writer_system_prompt: str | None = None
+    judge_system_prompt: str | None = None
+
     # Other settings
     simple_mode: bool = False
     seed: int = 42
@@ -119,14 +155,26 @@ class TournamentConfig(BaseModel):
     output_dir: str = "./runs"
     api_key: str | None = None
 
-    @field_validator("writers", "critics", "judges")
+    @field_validator("critics", "judges")
     @classmethod
     def validate_model_list(cls, v: list[str]) -> list[str]:
         """Ensure model IDs are non-empty strings."""
         for model_id in v:
             if not model_id or not model_id.strip():
-                msg = "Model IDs cannot be empty"
-                raise ValueError(msg)
+                raise ValueError("Model IDs cannot be empty")
+        return v
+
+    @field_validator("writers")
+    @classmethod
+    def validate_writers_list(cls, v: list[str | WriterConfig]) -> list[str | WriterConfig]:
+        """Ensure writer entries are valid (strings or WriterConfig)."""
+        for writer in v:
+            if isinstance(writer, str) and (not writer or not writer.strip()):
+                raise ValueError("Writer model IDs cannot be empty")
+            if isinstance(writer, WriterConfig) and (
+                not writer.model_id or not writer.model_id.strip()
+            ):
+                raise ValueError("WriterConfig.model_id cannot be empty")
         return v
 
     def model_post_init(self, __context: Any) -> None:
@@ -139,6 +187,24 @@ class TournamentConfig(BaseModel):
         if max_length is None:
             max_length = self.slug_max_length
         return truncate_slug(safe_id(model_id), max_length)
+
+    def get_writer_slug(self, writer: str | WriterConfig) -> str:
+        """Get slug for a writer (string or WriterConfig)."""
+        if isinstance(writer, WriterConfig):
+            return writer.get_slug(self.slug_max_length)
+        return self.get_slug_model(writer)
+
+    def get_writer_model_id(self, writer: str | WriterConfig) -> str:
+        """Get model ID for a writer (string or WriterConfig)."""
+        if isinstance(writer, WriterConfig):
+            return writer.model_id
+        return writer
+
+    def get_writer_system_prompt(self, writer: str | WriterConfig) -> str | None:
+        """Get custom system prompt for a writer, or None for default."""
+        if isinstance(writer, WriterConfig):
+            return writer.system_prompt
+        return None
 
     def get_slug_topic(self, title: str, max_length: int | None = None) -> str:
         """Convert a topic title to a URL-safe slug."""
