@@ -23,17 +23,10 @@ load_dotenv()
 # Path to RAG source documents
 RAG_SOURCES_DIR = Path(__file__).parent / "rag_sources" / "economy_2025"
 
-# Models to test (using fewer for demonstration)
-WRITERS = [
-    "openai/gpt-4o-mini",
-    "google/gemini-2.0-flash-001",
-]
+# Models to test comparison pattern
+# We will construct the writers list dynamically below
 
-CRITICS = WRITERS
-
-JUDGES = [
-    "openai/gpt-4o-mini",
-]
+JUDGES = ["openai/gpt-4o-mini"]
 
 
 def build_rag_context(query: str, top_k: int = 3) -> str:
@@ -57,68 +50,53 @@ async def main() -> None:
     if not api_key:
         raise RuntimeError("Set OPENROUTER_API_KEY environment variable")
 
-    # Build RAG context for each topic
-    print("Building RAG context from source documents...")
+    print("Building RAG contexts...")
 
+    # 1. Base Model (No Context)
+    base_writer = "openai/gpt-4o-mini"
+
+    # 2. RAG Model (Generated Context)
     economy_context = build_rag_context(
         "What are the key economic drivers and market trends in 2025-2026?"
     )
-    dollar_context = build_rag_context(
-        "How did the dollar perform against other currencies and gold?"
-    )
-    market_context = build_rag_context("How did US stocks compare to international markets?")
 
-    print(f"Retrieved {len(economy_context)} chars of economy context")
-    print(f"Retrieved {len(dollar_context)} chars of dollar context")
-    print(f"Retrieved {len(market_context)} chars of market context")
+    rag_system_prompt = (
+        "You are an expert economic analyst. Use the following context to answer:\n\n"
+        f"### Context\n{economy_context}\n\n"
+        "### Instructions\n"
+        "Integrate this context into your analysis."
+    )
+
+    rag_writer = {
+        "model_id": "openai/gpt-4o-mini",
+        "name": "gpt-4o-mini-rag",
+        "system_prompt": rag_system_prompt,
+    }
+
+    writers_config = [base_writer, rag_writer]
 
     config = TournamentConfig(
-        writers=WRITERS,
-        critics=CRITICS,
+        writers=writers_config,
+        critics=["openai/gpt-4o-mini"],
         judges=JUDGES,
         topics=[
             {
                 "title": "2025-2026 Economic Analysis",
                 "prompts": {
                     "Essay": (
-                        "Based on the source material provided, write an analysis of the "
-                        "key economic forces shaping 2025-2026. Focus on the interplay "
-                        "between fiscal policy, monetary policy, and market valuations. "
-                        "What are the main risks and opportunities for investors?"
+                        "Write an analysis of the key economic forces shaping 2025-2026. "
+                        "Focus on the interplay between fiscal policy and market valuations."
                     ),
                 },
-                "source_pack": economy_context,
-            },
-            {
-                "title": "Dollar and Currency Dynamics",
-                "prompts": {
-                    "Essay": (
-                        "Using the provided source material, analyze the dollar's "
-                        "performance in 2025 and its implications for global investors. "
-                        "Discuss how currency movements affected real returns across "
-                        "different asset classes."
-                    ),
-                },
-                "source_pack": dollar_context,
-            },
-            {
-                "title": "Global Market Rotation",
-                "prompts": {
-                    "Essay": (
-                        "Based on the source data, explain why non-US markets "
-                        "outperformed US stocks in 2025. What does this mean for "
-                        "portfolio construction and global asset allocation going forward?"
-                    ),
-                },
-                "source_pack": market_context,
+                # We leave source_pack empty here because we injected it into the
+                # RAG writer's system prompt directly.
+                "source_pack": None,
             },
         ],
         output_dir=str(Path("./runs")),
-        simple_mode=True,  # v0 only for speed
+        simple_mode=True,
         seed=2026,
         writer_tokens=2000,
-        critic_tokens=800,
-        revision_tokens=2000,
         judge_tokens=1000,
         ranking={
             "rounds": 3,

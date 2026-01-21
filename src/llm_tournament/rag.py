@@ -6,6 +6,7 @@ Uses markitdown for ingestion and sentence-transformers + numpy for retrieval.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 from markitdown import MarkItDown
@@ -16,6 +17,27 @@ from sklearn.metrics.pairwise import cosine_similarity
 DEFAULT_CHUNK_SIZE = 500
 DEFAULT_CHUNK_OVERLAP = 50
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+
+
+@runtime_checkable
+class Retriever(Protocol):
+    """Protocol for document retrieval systems.
+
+    Implement this protocol to provide custom retrieval logic.
+    The `RAGSystem` class is an example implementation.
+    """
+
+    def retrieve(self, query: str, top_k: int = 3) -> str:
+        """Retrieve relevant context for a query.
+
+        Args:
+            query: The search query.
+            top_k: Number of chunks to return.
+
+        Returns:
+            Retrieved context as a string.
+        """
+        ...
 
 
 def chunk_text(
