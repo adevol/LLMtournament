@@ -150,3 +150,54 @@ class RAGSystem:
         relevant_chunks = [self._chunks[i] for i in top_indices]
 
         return "\n\n---\n\n".join(relevant_chunks)
+
+
+def build_rag_writer(
+    model_id: str,
+    retriever: Retriever,
+    query: str,
+    name: str | None = None,
+    prompt_template: str | None = None,
+) -> dict:
+    """Create a WriterConfig dict with RAG context injected.
+
+    This helper makes it easy to plug in custom retrieval pipelines.
+
+    Args:
+        model_id: The model identifier (e.g., "openai/gpt-4o").
+        retriever: Any object implementing the Retriever protocol.
+        query: Query to retrieve context for.
+        name: Optional display name. Defaults to "{model}-rag".
+        prompt_template: Optional template with {context} placeholder.
+            Defaults to a simple context injection prompt.
+
+    Returns:
+        A dict suitable for use in TournamentConfig.writers.
+
+    Example:
+        >>> rag = RAGSystem("./docs")
+        >>> writers = [
+        ...     "openai/gpt-4o",  # base
+        ...     build_rag_writer("openai/gpt-4o", rag, "my query"),  # RAG
+        ... ]
+    """
+    context = retriever.retrieve(query)
+
+    if prompt_template is None:
+        prompt_template = (
+            "You have access to the following reference material:\n\n"
+            "---\n{context}\n---\n\n"
+            "Use this context to inform your response when relevant."
+        )
+
+    system_prompt = prompt_template.format(context=context)
+
+    if name is None:
+        # Extract model name from "provider/model" format
+        name = f"{model_id.split('/')[-1]}-rag"
+
+    return {
+        "model_id": model_id,
+        "name": name,
+        "system_prompt": system_prompt,
+    }

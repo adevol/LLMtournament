@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from llm_tournament.rag import RAGSystem, Retriever, chunk_text
+from llm_tournament.rag import RAGSystem, Retriever, build_rag_writer, chunk_text
 
 
 class TestChunkText:
@@ -89,3 +89,56 @@ class TestRAGSystem:
         rag = RAGSystem(tmp_path / "nonexistent")
         with pytest.raises(FileNotFoundError):
             rag.load_and_index()
+
+
+class TestBuildRagWriter:
+    """Tests for build_rag_writer helper."""
+
+    def test_creates_valid_writer_config(self, tmp_path: Path):
+        """Returns a valid WriterConfig dict."""
+        (tmp_path / "doc.txt").write_text("Test content about economics.")
+        rag = RAGSystem(tmp_path)
+        rag.load_and_index()
+
+        result = build_rag_writer(
+            model_id="openai/gpt-4o",
+            retriever=rag,
+            query="economics",
+        )
+
+        assert result["model_id"] == "openai/gpt-4o"
+        assert result["name"] == "gpt-4o-rag"
+        assert "system_prompt" in result
+        assert (
+            "economics" in result["system_prompt"].lower()
+            or "content" in result["system_prompt"].lower()
+        )
+
+    def test_custom_name(self, tmp_path: Path):
+        """Custom name is used correctly."""
+        (tmp_path / "doc.txt").write_text("Test content.")
+        rag = RAGSystem(tmp_path)
+
+        result = build_rag_writer(
+            model_id="openai/gpt-4o",
+            retriever=rag,
+            query="test",
+            name="my-custom-rag",
+        )
+
+        assert result["name"] == "my-custom-rag"
+
+    def test_custom_prompt_template(self, tmp_path: Path):
+        """Custom prompt template is used."""
+        (tmp_path / "doc.txt").write_text("Custom content here.")
+        rag = RAGSystem(tmp_path)
+
+        result = build_rag_writer(
+            model_id="openai/gpt-4o",
+            retriever=rag,
+            query="test",
+            prompt_template="CONTEXT: {context} END",
+        )
+
+        assert "CONTEXT:" in result["system_prompt"]
+        assert "END" in result["system_prompt"]

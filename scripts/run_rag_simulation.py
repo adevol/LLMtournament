@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from llm_tournament.core.config import TournamentConfig
 from llm_tournament.pipeline import TournamentPipeline
-from llm_tournament.rag import RAGSystem
+from llm_tournament.rag import RAGSystem, build_rag_writer
 from llm_tournament.services.llm import CostTracker, PricingService, create_client
 from llm_tournament.services.storage import TournamentStore
 
@@ -23,25 +23,7 @@ load_dotenv()
 # Path to RAG source documents
 RAG_SOURCES_DIR = Path(__file__).parent / "rag_sources" / "economy_2025"
 
-# Models to test comparison pattern
-# We will construct the writers list dynamically below
-
 JUDGES = ["openai/gpt-4o-mini"]
-
-
-def build_rag_context(query: str, top_k: int = 3) -> str:
-    """Build RAG context from source documents.
-
-    Args:
-        query: The question or topic to retrieve context for.
-        top_k: Number of chunks to retrieve.
-
-    Returns:
-        Retrieved context as a formatted string.
-    """
-    rag = RAGSystem(RAG_SOURCES_DIR)
-    rag.load_and_index()
-    return rag.retrieve(query, top_k=top_k)
 
 
 async def main() -> None:
@@ -50,30 +32,23 @@ async def main() -> None:
     if not api_key:
         raise RuntimeError("Set OPENROUTER_API_KEY environment variable")
 
-    print("Building RAG contexts...")
+    print("Building RAG context...")
 
-    # 1. Base Model (No Context)
-    base_writer = "openai/gpt-4o-mini"
+    # Initialize your retriever (can be RAGSystem or any custom Retriever)
+    rag = RAGSystem(RAG_SOURCES_DIR)
+    rag.load_and_index()
 
-    # 2. RAG Model (Generated Context)
-    economy_context = build_rag_context(
-        "What are the key economic drivers and market trends in 2025-2026?"
-    )
-
-    rag_system_prompt = (
-        "You are an expert economic analyst. Use the following context to answer:\n\n"
-        f"### Context\n{economy_context}\n\n"
-        "### Instructions\n"
-        "Integrate this context into your analysis."
-    )
-
-    rag_writer = {
-        "model_id": "openai/gpt-4o-mini",
-        "name": "gpt-4o-mini-rag",
-        "system_prompt": rag_system_prompt,
-    }
-
-    writers_config = [base_writer, rag_writer]
+    # Compare: Base model vs RAG-enhanced model
+    writers_config = [
+        # 1. Base model (no context)
+        "openai/gpt-4o-mini",
+        # 2. RAG-enhanced model (with retrieved context)
+        build_rag_writer(
+            model_id="openai/gpt-4o-mini",
+            retriever=rag,
+            query="What are the key economic drivers and market trends in 2025-2026?",
+        ),
+    ]
 
     config = TournamentConfig(
         writers=writers_config,
