@@ -78,7 +78,7 @@ class TournamentStore:
         """Save config snapshot and run metadata."""
         config_path = self.base_dir / "config_snapshot.yaml"
         with config_path.open("w") as f:
-            config_dict = self.config.model_dump(exclude={"api_key"})
+            config_dict = self.config.model_dump(exclude={"api_key", "retriever"})
             yaml.dump(config_dict, f, default_flow_style=False)
 
         metadata = {

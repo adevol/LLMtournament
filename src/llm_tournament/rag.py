@@ -5,6 +5,7 @@ Uses markitdown for ingestion and sentence-transformers + numpy for retrieval.
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -152,6 +153,33 @@ class RAGSystem:
         return "\n\n---\n\n".join(relevant_chunks)
 
 
+def build_rag_context(
+    retriever: Retriever,
+    query: str,
+    template: str | None = None,
+) -> str:
+    """Build RAG context string from retriever.
+
+    Args:
+        retriever: Any object implementing the Retriever protocol.
+        query: Query to retrieve context for.
+        template: Optional template with {context} placeholder.
+
+    Returns:
+        Formatted context string ready for injection into system prompt.
+    """
+    context = retriever.retrieve(query)
+
+    if template is None:
+        template = (
+            "You have access to the following reference material:\n\n"
+            "---\n{context}\n---\n\n"
+            "Use this context to inform your response when relevant."
+        )
+
+    return template.format(context=context)
+
+
 def build_rag_writer(
     model_id: str,
     retriever: Retriever,
@@ -161,7 +189,9 @@ def build_rag_writer(
 ) -> dict:
     """Create a WriterConfig dict with RAG context injected.
 
-    This helper makes it easy to plug in custom retrieval pipelines.
+    .. deprecated::
+        Use WriterConfig with use_rag=True and topic-level rag_queries instead.
+        This function will be removed in a future version.
 
     Args:
         model_id: The model identifier (e.g., "openai/gpt-4o").
@@ -169,31 +199,20 @@ def build_rag_writer(
         query: Query to retrieve context for.
         name: Optional display name. Defaults to "{model}-rag".
         prompt_template: Optional template with {context} placeholder.
-            Defaults to a simple context injection prompt.
 
     Returns:
         A dict suitable for use in TournamentConfig.writers.
-
-    Example:
-        >>> rag = RAGSystem("./docs")
-        >>> writers = [
-        ...     "openai/gpt-4o",  # base
-        ...     build_rag_writer("openai/gpt-4o", rag, "my query"),  # RAG
-        ... ]
     """
-    context = retriever.retrieve(query)
+    warnings.warn(
+        "build_rag_writer is deprecated. Use WriterConfig(use_rag=True) with "
+        "topic-level rag_queries instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
-    if prompt_template is None:
-        prompt_template = (
-            "You have access to the following reference material:\n\n"
-            "---\n{context}\n---\n\n"
-            "Use this context to inform your response when relevant."
-        )
-
-    system_prompt = prompt_template.format(context=context)
+    system_prompt = build_rag_context(retriever, query, prompt_template)
 
     if name is None:
-        # Extract model name from "provider/model" format
         name = f"{model_id.split('/')[-1]}-rag"
 
     return {

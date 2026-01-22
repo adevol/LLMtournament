@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 DEFAULT_SLUG_MAX_LENGTH = 50
 
@@ -34,6 +34,7 @@ class TopicConfig(BaseModel):
 
     title: str
     prompts: dict[str, str] = Field(default_factory=dict)
+    rag_queries: dict[str, str] | None = None
     source_pack: str | None = None
     slug_max_length: int | None = Field(default=None, ge=1)
 
@@ -61,11 +62,13 @@ class WriterConfig(BaseModel):
         model_id: The model identifier (e.g., "openai/gpt-4").
         system_prompt: Optional custom system prompt. If None, uses the default.
         name: Optional display name. If None, auto-generated from model_id + prompt hash.
+        use_rag: If True, inject RAG context from topic's rag_queries.
     """
 
     model_id: str
     system_prompt: str | None = None
     name: str | None = None
+    use_rag: bool = False
 
     def get_slug(self, max_length: int = DEFAULT_SLUG_MAX_LENGTH) -> str:
         """Generate a unique slug for this writer config.
@@ -77,10 +80,12 @@ class WriterConfig(BaseModel):
             base = safe_id(self.name)
         else:
             base = safe_id(self.model_id)
+            prompt_hash = hashlib.sha256(self.system_prompt.encode()).hexdigest()[:6]
             if self.system_prompt:
                 # Append short hash for uniqueness
-                prompt_hash = hashlib.sha256(self.system_prompt.encode()).hexdigest()[:6]
                 base = f"{base}_{prompt_hash}"
+            elif self.use_rag:
+                base = f"{base}_{prompt_hash}_rag"
         return truncate_slug(base, max_length)
 
 
@@ -120,11 +125,16 @@ class RankingConfig(BaseModel):
 class TournamentConfig(BaseModel):
     """Complete tournament configuration."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     # Model lists - writers can be strings or WriterConfig objects
     writers: list[str | WriterConfig] = Field(..., min_length=1)
     critics: list[str] = Field(..., min_length=1)
     judges: list[str] = Field(..., min_length=1)
     topics: list[TopicConfig] = Field(..., min_length=1)
+
+    # RAG retriever (optional, enables RAG for writers with use_rag=True)
+    retriever: Any = None
 
     # Token caps per role
     writer_tokens: int = 1200
@@ -205,6 +215,12 @@ class TournamentConfig(BaseModel):
         if isinstance(writer, WriterConfig):
             return writer.system_prompt
         return None
+
+    def writer_uses_rag(self, writer: str | WriterConfig) -> bool:
+        """Check if a writer should use RAG context injection."""
+        if isinstance(writer, WriterConfig):
+            return writer.use_rag
+        return False
 
     def get_slug_topic(self, title: str, max_length: int | None = None) -> str:
         """Convert a topic title to a URL-safe slug."""

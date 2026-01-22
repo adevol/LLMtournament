@@ -12,9 +12,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from llm_tournament.core.config import TournamentConfig
+from llm_tournament.core.config import TournamentConfig, WriterConfig
 from llm_tournament.pipeline import TournamentPipeline
-from llm_tournament.rag import RAGSystem, build_rag_writer
+from llm_tournament.rag import RAGSystem
 from llm_tournament.services.llm import CostTracker, PricingService, create_client
 from llm_tournament.services.storage import TournamentStore
 
@@ -34,7 +34,7 @@ async def main() -> None:
 
     print("Building RAG context...")
 
-    # Initialize your retriever (can be RAGSystem or any custom Retriever)
+    # Initialize your retriever
     rag = RAGSystem(RAG_SOURCES_DIR)
     rag.load_and_index()
 
@@ -42,11 +42,11 @@ async def main() -> None:
     writers_config = [
         # 1. Base model (no context)
         "openai/gpt-4o-mini",
-        # 2. RAG-enhanced model (with retrieved context)
-        build_rag_writer(
+        # 2. RAG-enhanced model (with retrieved context from topic)
+        WriterConfig(
             model_id="openai/gpt-4o-mini",
-            retriever=rag,
-            query="What are the key economic drivers and market trends in 2025-2026?",
+            name="gpt-4o-mini-rag",
+            use_rag=True,
         ),
     ]
 
@@ -54,6 +54,7 @@ async def main() -> None:
         writers=writers_config,
         critics=["openai/gpt-4o-mini"],
         judges=JUDGES,
+        retriever=rag,
         topics=[
             {
                 "title": "2025-2026 Economic Analysis",
@@ -63,8 +64,10 @@ async def main() -> None:
                         "Focus on the interplay between fiscal policy and market valuations."
                     ),
                 },
-                # We leave source_pack empty here because we injected it into the
-                # RAG writer's system prompt directly.
+                # RAG queries per prompt key - retrieval happens automatically
+                "rag_queries": {
+                    "Essay": "What are the key economic drivers and market trends in 2025-2026?",
+                },
                 "source_pack": None,
             },
         ],
