@@ -7,6 +7,7 @@ import asyncio
 import structlog
 
 from llm_tournament.core.config import TournamentConfig, calculate_nr_rounds
+from llm_tournament.core.progress import TournamentProgress
 from llm_tournament.ranking import RankingSystem, create_ranking_system
 from llm_tournament.services.analysis import AnalysisService
 from llm_tournament.services.llm import LLMClient
@@ -50,6 +51,7 @@ class TournamentPipeline:
         self.store = store
         self.max_concurrency = max_concurrency
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        self.progress = TournamentProgress()
 
         self.judges = config.judges
 
@@ -70,9 +72,15 @@ class TournamentPipeline:
             writers=len(self.config.writers),
         )
 
-        for topic in self.config.topics:
-            logger.info("processing_topic", title=topic.title)
-            await self._process_topic(topic.slug)
+        # Process topics with progress tracking
+        async for _topic, _ in self.progress.track_generation(
+            [t.title for t in self.config.topics],
+            lambda title: self._process_topic(
+                next(t for t in self.config.topics if t.title == title).slug
+            ),
+            description="Processing topics",
+        ):
+            pass
 
         # Cross-Topic Aggregation
         logger.info("stage_aggregation")
@@ -85,28 +93,23 @@ class TournamentPipeline:
         topic = next(t for t in self.config.topics if t.slug == topic_slug)
 
         # Generation
-        logger.info("stage_generation", topic=topic_slug)
         await self.submission_service.run_generation_batch(topic, self.config.writers)
 
         if not self.config.simple_mode:
             # Critique
-            logger.info("stage_critique", topic=topic_slug)
             await self.submission_service.run_critique_batch(
                 topic, self.config.writers, self.config.critics
             )
 
             # Revision
-            logger.info("stage_revision", topic=topic_slug)
             await self.submission_service.run_revision_batch(
                 topic, self.config.writers, self.config.critics
             )
 
         # Ranking
-        logger.info("stage_ranking", topic=topic_slug)
         await self._run_ranking(topic_slug)
 
         # Analysis
-        logger.info("stage_analysis", topic=topic_slug)
         await self.analysis_service.run_analysis(topic_slug)
 
     def _create_candidates(self) -> tuple[list[Candidate], str]:
@@ -132,10 +135,15 @@ class TournamentPipeline:
         ranking_system.initialize([c.id for c in candidates])
 
         rotation = JudgeRotation(self.judges)
-        for round_num in range(1, rounds + 1):
-            await self.match_service.run_ranking_round(
-                topic_slug, round_num, candidates, ranking_system, rotation, version
-            )
+        # Track ranking rounds with progress
+        async for _round_num, _ in self.progress.track_rounds(
+            rounds,
+            lambda r: self.match_service.run_ranking_round(
+                topic_slug, r, candidates, ranking_system, rotation, version
+            ),
+            description="Running ranking rounds",
+        ):
+            pass
 
         await self._save_leaderboard(topic_slug, candidates, ranking_system)
         await self._save_aggregates(topic_slug, candidates, ranking_system)
