@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from typing import Any
 
 from rich.console import Console
@@ -32,10 +32,10 @@ class TournamentProgress:
 
     async def track_generation(
         self,
-        items: list[str],
-        generator_func: Callable[[str], Any],
+        items: list[Any],
+        generator_func: Callable[[Any], Any],
         description: str = "Processing",
-    ) -> AsyncIterator[tuple[str, Any]]:
+    ) -> None:
         """Track progress for processing multiple items.
 
         Args:
@@ -43,8 +43,8 @@ class TournamentProgress:
             generator_func: Async function to call for each item.
             description: Description of the operation.
 
-        Yields:
-            Tuples of (item, result) as each completes.
+        Returns:
+            None.
         """
         with Progress(
             SpinnerColumn(),
@@ -56,16 +56,16 @@ class TournamentProgress:
             task = progress.add_task(f"[cyan]{description}...", total=len(items))
 
             for item in items:
-                result = await generator_func(item)
-                progress.update(task, advance=1, description=f"[cyan]{description}: {item}")
-                yield item, result
+                await generator_func(item)
+                label = getattr(item, "title", str(item))
+                progress.update(task, advance=1, description=f"[cyan]{description}: {label}")
 
     async def track_rounds(
         self,
         rounds: int,
         round_func: Callable[[int], Any],
         description: str = "Running rounds",
-    ) -> AsyncIterator[int]:
+    ) -> None:
         """Track progress for multiple rounds.
 
         Args:
@@ -73,8 +73,8 @@ class TournamentProgress:
             round_func: Async function to call for each round.
             description: Description of the operation.
 
-        Yields:
-            Round numbers as each completes.
+        Returns:
+            None.
         """
         with Progress(
             SpinnerColumn(),
@@ -86,7 +86,6 @@ class TournamentProgress:
             task = progress.add_task(f"[green]{description}...", total=rounds)
 
             for round_num in range(1, rounds + 1):
-                result = await round_func(round_num)
+                await round_func(round_num)
                 desc = f"[green]{description}: {round_num}/{rounds}"
                 progress.update(task, advance=1, description=desc)
-                yield round_num, result

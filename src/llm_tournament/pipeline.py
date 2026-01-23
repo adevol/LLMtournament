@@ -73,14 +73,11 @@ class TournamentPipeline:
         )
 
         # Process topics with progress tracking
-        async for _topic, _ in self.progress.track_generation(
-            [t.title for t in self.config.topics],
-            lambda title: self._process_topic(
-                next(t for t in self.config.topics if t.title == title).slug
-            ),
+        await self.progress.track_generation(
+            self.config.topics,
+            lambda topic: self._process_topic(topic.slug),
             description="Processing topics",
-        ):
-            pass
+        )
 
         # Cross-Topic Aggregation
         logger.info("stage_aggregation")
@@ -91,25 +88,31 @@ class TournamentPipeline:
     async def _process_topic(self, topic_slug: str) -> None:
         """Process a single topic through all stages."""
         topic = next(t for t in self.config.topics if t.slug == topic_slug)
+        logger.info("processing_topic", title=topic.title)
 
         # Generation
+        logger.info("stage_generation", topic=topic_slug)
         await self.submission_service.run_generation_batch(topic, self.config.writers)
 
         if not self.config.simple_mode:
             # Critique
+            logger.info("stage_critique", topic=topic_slug)
             await self.submission_service.run_critique_batch(
                 topic, self.config.writers, self.config.critics
             )
 
             # Revision
+            logger.info("stage_revision", topic=topic_slug)
             await self.submission_service.run_revision_batch(
                 topic, self.config.writers, self.config.critics
             )
 
         # Ranking
+        logger.info("stage_ranking", topic=topic_slug)
         await self._run_ranking(topic_slug)
 
         # Analysis
+        logger.info("stage_analysis", topic=topic_slug)
         await self.analysis_service.run_analysis(topic_slug)
 
     def _create_candidates(self) -> tuple[list[Candidate], str]:
@@ -136,14 +139,13 @@ class TournamentPipeline:
 
         rotation = JudgeRotation(self.judges)
         # Track ranking rounds with progress
-        async for _round_num, _ in self.progress.track_rounds(
+        await self.progress.track_rounds(
             rounds,
             lambda r: self.match_service.run_ranking_round(
                 topic_slug, r, candidates, ranking_system, rotation, version
             ),
             description="Running ranking rounds",
-        ):
-            pass
+        )
 
         await self._save_leaderboard(topic_slug, candidates, ranking_system)
         await self._save_aggregates(topic_slug, candidates, ranking_system)

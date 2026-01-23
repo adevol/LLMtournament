@@ -243,6 +243,7 @@ def run(
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1) from e
     except ConfigurationError as e:
+        console.print(f"[red]Configuration error in {config_path}:[/red]")
         console.print(f"[red]{e}")
         raise typer.Exit(1) from e
     except Exception as e:
@@ -276,6 +277,7 @@ def validate(
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1) from e
     except ConfigurationError as e:
+        console.print(f"[red]Configuration error in {config_path}:[/red]")
         console.print(f"[red]{e}")
         raise typer.Exit(1) from e
     except Exception as e:

@@ -74,7 +74,6 @@ class WriterConfig(BaseModel):
         if self.system_prompt:
             hash_content = self.system_prompt
         elif self.use_rag:
-            hash_content = ""
             suffix = "rag"
 
         return slug_gen.safe_slug(
