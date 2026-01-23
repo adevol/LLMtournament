@@ -8,7 +8,7 @@ from typing import Literal
 
 from tabulate import tabulate
 
-from llm_tournament.core.config import truncate_slug
+from llm_tournament.core.slug import SlugGenerator
 from llm_tournament.models import Rating
 from llm_tournament.ranking import RankingSystem
 from llm_tournament.services.match import Candidate
@@ -92,8 +92,9 @@ def generate_aggregate_report(
     def by_mean_desc(item: tuple[str, list[float]]) -> float:
         return -mean(item[1])
 
+    slugger = SlugGenerator(max_length=max_slug_length)
     rows = [
-        (truncate_slug(group, max_slug_length), f"{mean(ratings):.1f}", len(ratings))
+        (slugger.truncate(group), f"{mean(ratings):.1f}", len(ratings))
         for group, ratings in sorted(ratings_by_group.items(), key=by_mean_desc)
     ]
 

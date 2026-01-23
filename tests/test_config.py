@@ -13,8 +13,8 @@ from llm_tournament.core.config import (
     WriterConfig,
     hash_messages,
     load_config,
-    safe_id,
 )
+from llm_tournament.core.slug import SlugGenerator
 
 
 class TestTopicConfig:
@@ -139,15 +139,15 @@ class TestLoadConfig:
 
 
 class TestSafeId:
-    """Tests for safe_id function."""
+    """Tests for safe_id helper."""
 
     def test_basic_slug(self):
         """Test basic model ID to slug conversion."""
-        assert safe_id("openai/gpt-4-turbo") == "openai__gpt-4-turbo"
+        assert SlugGenerator.safe_id("openai/gpt-4-turbo") == "openai__gpt-4-turbo"
 
     def test_slug_with_colon(self):
         """Test model ID with colon."""
-        assert safe_id("openai/gpt-4:latest") == "openai__gpt-4_latest"
+        assert SlugGenerator.safe_id("openai/gpt-4:latest") == "openai__gpt-4_latest"
 
 
 class TestHashMessages:

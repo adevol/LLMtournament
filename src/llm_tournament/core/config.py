@@ -6,27 +6,16 @@ import hashlib
 import json
 import math
 import os
-import re
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from llm_tournament.core.errors import APIKeyError
+from llm_tournament.core.slug import SlugGenerator
+
 DEFAULT_SLUG_MAX_LENGTH = 50
-
-
-def safe_id(value: str) -> str:
-    """Convert arbitrary ID to filesystem-safe slug."""
-    return value.replace("/", "__").replace(":", "_")
-
-
-def truncate_slug(value: str, max_length: int) -> str:
-    """Cap slug length to keep filesystem paths manageable on systems with path length
-    limits (e.g., Windows)."""
-    if len(value) <= max_length:
-        return value
-    return value[:max_length]
 
 
 class TopicConfig(BaseModel):
@@ -48,9 +37,8 @@ class TopicConfig(BaseModel):
     @property
     def slug(self) -> str:
         """Generate URL-safe slug from title."""
-        slug = re.sub(r"[^a-z0-9]+", "-", self.title.lower()).strip("-")
-        max_length = self.slug_max_length or DEFAULT_SLUG_MAX_LENGTH
-        return truncate_slug(slug, max_length)
+        slug_gen = SlugGenerator(max_length=self.slug_max_length or DEFAULT_SLUG_MAX_LENGTH)
+        return slug_gen.slugify(self.title)
 
 
 class WriterConfig(BaseModel):
@@ -76,17 +64,24 @@ class WriterConfig(BaseModel):
         If name is provided, uses that. Otherwise, generates from model_id
         plus a short hash of the system_prompt (if custom).
         """
+        slug_gen = SlugGenerator(max_length=max_length)
+
         if self.name:
-            base = safe_id(self.name)
-        else:
-            base = safe_id(self.model_id)
-            prompt_hash = hashlib.sha256(self.system_prompt.encode()).hexdigest()[:6]
-            if self.system_prompt:
-                # Append short hash for uniqueness
-                base = f"{base}_{prompt_hash}"
-            elif self.use_rag:
-                base = f"{base}_{prompt_hash}_rag"
-        return truncate_slug(base, max_length)
+            return slug_gen.safe_slug(self.name)
+
+        hash_content = None
+        suffix = None
+        if self.system_prompt:
+            hash_content = self.system_prompt
+        elif self.use_rag:
+            hash_content = ""
+            suffix = "rag"
+
+        return slug_gen.safe_slug(
+            self.model_id,
+            hash_content=hash_content,
+            suffix=suffix,
+        )
 
 
 class RankingConfig(BaseModel):
@@ -194,9 +189,8 @@ class TournamentConfig(BaseModel):
 
     def get_slug_model(self, model_id: str, max_length: int | None = None) -> str:
         """Convert model ID to filesystem-safe slug."""
-        if max_length is None:
-            max_length = self.slug_max_length
-        return truncate_slug(safe_id(model_id), max_length)
+        slug_gen = SlugGenerator(max_length=max_length or self.slug_max_length)
+        return slug_gen.safe_slug(model_id)
 
     def get_writer_slug(self, writer: str | WriterConfig) -> str:
         """Get slug for a writer (string or WriterConfig)."""
@@ -224,20 +218,14 @@ class TournamentConfig(BaseModel):
 
     def get_slug_topic(self, title: str, max_length: int | None = None) -> str:
         """Convert a topic title to a URL-safe slug."""
-        if max_length is None:
-            max_length = self.slug_max_length
-        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
-        return truncate_slug(slug, max_length)
+        slug_gen = SlugGenerator(max_length=max_length or self.slug_max_length)
+        return slug_gen.slugify(title)
 
     def get_api_key(self) -> str:
         """Get API key from config or environment."""
         key = self.api_key or os.environ.get("OPENROUTER_API_KEY")
         if not key:
-            msg = (
-                "API key required. Set OPENROUTER_API_KEY env var "
-                "or api_key in config (avoid committing secrets to git)."
-            )
-            raise ValueError(msg)
+            raise APIKeyError()
         return key
 
 
