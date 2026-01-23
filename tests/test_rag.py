@@ -1,11 +1,16 @@
 """Tests for RAG module."""
 
+import asyncio
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from llm_tournament.rag import RAGSystem, Retriever, build_rag_writer, chunk_text
+from llm_tournament.core.config import TopicConfig, TournamentConfig, WriterConfig
+from llm_tournament.prompts import writer_system_prompt
+from llm_tournament.rag import RAGSystem, Retriever, build_rag_context, chunk_text
+from llm_tournament.services.llm.client import LLMResponse
+from llm_tournament.services.submission import SubmissionService
 
 
 class TestChunkText:
@@ -91,54 +96,100 @@ class TestRAGSystem:
             rag.load_and_index()
 
 
-class TestBuildRagWriter:
-    """Tests for build_rag_writer helper."""
+class DummyRetriever:
+    """Simple retriever for testing RAG workflows."""
 
-    def test_creates_valid_writer_config(self, tmp_path: Path):
-        """Returns a valid WriterConfig dict."""
-        (tmp_path / "doc.txt").write_text("Test content about economics.")
-        rag = RAGSystem(tmp_path)
-        rag.load_and_index()
+    def retrieve(self, query: str, _top_k: int = 3) -> str:
+        return f"retrieved:{query}"
 
-        result = build_rag_writer(
-            model_id="openai/gpt-4o",
-            retriever=rag,
-            query="economics",
+
+class CapturingLLMClient:
+    """LLM client stub that captures messages for assertions."""
+
+    def __init__(self) -> None:
+        self.messages: list[list[dict[str, str]]] = []
+
+    @property
+    def total_cost(self) -> float:
+        return 0.0
+
+    async def complete(
+        self,
+        _model: str,
+        messages: list[dict[str, str]],
+        _max_tokens: int,
+        _temperature: float,
+    ) -> LLMResponse:
+        self.messages.append(messages)
+        return LLMResponse(content="ok", prompt_tokens=0, completion_tokens=0, total_tokens=0)
+
+
+class DummyStore:
+    """Store stub that records essays without touching disk."""
+
+    def __init__(self) -> None:
+        self.saved: list[tuple[str, str, str, str]] = []
+
+    async def save_essay(
+        self, topic_slug: str, writer_slug: str, content: str, version: str
+    ) -> None:
+        self.saved.append((topic_slug, writer_slug, content, version))
+
+
+class TestRAGWorkflow:
+    """Tests for the preferred WriterConfig(use_rag=True) workflow."""
+
+    async def test_use_rag_injects_context(self):
+        """RAG context is prepended when use_rag=True and queries exist."""
+        topic = TopicConfig(
+            title="Test Topic",
+            prompts={"fiction": "Write a short story."},
+            rag_queries={"fiction": "economics"},
         )
-
-        assert result["model_id"] == "openai/gpt-4o"
-        assert result["name"] == "gpt-4o-rag"
-        assert "system_prompt" in result
-        assert (
-            "economics" in result["system_prompt"].lower()
-            or "content" in result["system_prompt"].lower()
+        writer = WriterConfig(model_id="openai/gpt-4o", use_rag=True)
+        config = TournamentConfig(
+            writers=[writer],
+            critics=["openai/gpt-4o"],
+            judges=["openai/gpt-4o"],
+            topics=[topic],
         )
+        config.retriever = DummyRetriever()
 
-    def test_custom_name(self, tmp_path: Path):
-        """Custom name is used correctly."""
-        (tmp_path / "doc.txt").write_text("Test content.")
-        rag = RAGSystem(tmp_path)
+        client = CapturingLLMClient()
+        store = DummyStore()
+        service = SubmissionService(config, client, store, asyncio.Semaphore(1))
 
-        result = build_rag_writer(
-            model_id="openai/gpt-4o",
-            retriever=rag,
-            query="test",
-            name="my-custom-rag",
+        await service.run_generation_batch(topic, config.writers)
+
+        assert client.messages, "Expected at least one LLM call"
+        system_prompt = client.messages[0][0]["content"]
+        rag_context = build_rag_context(config.retriever, "economics")
+        base_prompt = writer_system_prompt()
+        assert system_prompt.startswith(rag_context)
+        assert system_prompt.endswith(base_prompt)
+
+    async def test_use_rag_without_query_skips_context(self):
+        """No context is injected when the topic lacks matching rag_queries."""
+        topic = TopicConfig(
+            title="Test Topic",
+            prompts={"fiction": "Write a short story."},
+            rag_queries={"journalism": "economics"},
         )
-
-        assert result["name"] == "my-custom-rag"
-
-    def test_custom_prompt_template(self, tmp_path: Path):
-        """Custom prompt template is used."""
-        (tmp_path / "doc.txt").write_text("Custom content here.")
-        rag = RAGSystem(tmp_path)
-
-        result = build_rag_writer(
-            model_id="openai/gpt-4o",
-            retriever=rag,
-            query="test",
-            prompt_template="CONTEXT: {context} END",
+        writer = WriterConfig(model_id="openai/gpt-4o", use_rag=True)
+        config = TournamentConfig(
+            writers=[writer],
+            critics=["openai/gpt-4o"],
+            judges=["openai/gpt-4o"],
+            topics=[topic],
         )
+        config.retriever = DummyRetriever()
 
-        assert "CONTEXT:" in result["system_prompt"]
-        assert "END" in result["system_prompt"]
+        client = CapturingLLMClient()
+        store = DummyStore()
+        service = SubmissionService(config, client, store, asyncio.Semaphore(1))
+
+        await service.run_generation_batch(topic, config.writers)
+
+        assert client.messages, "Expected at least one LLM call"
+        system_prompt = client.messages[0][0]["content"]
+        assert system_prompt == writer_system_prompt()

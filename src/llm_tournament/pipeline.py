@@ -7,6 +7,7 @@ import asyncio
 import structlog
 
 from llm_tournament.core.config import TournamentConfig, calculate_nr_rounds
+from llm_tournament.core.progress import TournamentProgress
 from llm_tournament.ranking import RankingSystem, create_ranking_system
 from llm_tournament.services.analysis import AnalysisService
 from llm_tournament.services.llm import LLMClient
@@ -50,6 +51,7 @@ class TournamentPipeline:
         self.store = store
         self.max_concurrency = max_concurrency
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        self.progress = TournamentProgress()
 
         self.judges = config.judges
 
@@ -70,9 +72,12 @@ class TournamentPipeline:
             writers=len(self.config.writers),
         )
 
-        for topic in self.config.topics:
-            logger.info("processing_topic", title=topic.title)
-            await self._process_topic(topic.slug)
+        # Process topics with progress tracking
+        await self.progress.track_generation(
+            self.config.topics,
+            lambda topic: self._process_topic(topic.slug),
+            description="Processing topics",
+        )
 
         # Cross-Topic Aggregation
         logger.info("stage_aggregation")
@@ -83,6 +88,7 @@ class TournamentPipeline:
     async def _process_topic(self, topic_slug: str) -> None:
         """Process a single topic through all stages."""
         topic = next(t for t in self.config.topics if t.slug == topic_slug)
+        logger.info("processing_topic", title=topic.title)
 
         # Generation
         logger.info("stage_generation", topic=topic_slug)
@@ -132,10 +138,14 @@ class TournamentPipeline:
         ranking_system.initialize([c.id for c in candidates])
 
         rotation = JudgeRotation(self.judges)
-        for round_num in range(1, rounds + 1):
-            await self.match_service.run_ranking_round(
-                topic_slug, round_num, candidates, ranking_system, rotation, version
-            )
+        # Track ranking rounds with progress
+        await self.progress.track_rounds(
+            rounds,
+            lambda r: self.match_service.run_ranking_round(
+                topic_slug, r, candidates, ranking_system, rotation, version
+            ),
+            description="Running ranking rounds",
+        )
 
         await self._save_leaderboard(topic_slug, candidates, ranking_system)
         await self._save_aggregates(topic_slug, candidates, ranking_system)

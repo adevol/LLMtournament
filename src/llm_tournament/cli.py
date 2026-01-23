@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import structlog
 import typer
@@ -13,9 +13,33 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from llm_tournament import __version__
-from llm_tournament.core.config import load_config
+from llm_tournament.core.config import TournamentConfig, load_config
+from llm_tournament.core.errors import ConfigurationError
 from llm_tournament.pipeline import run_tournament
 from llm_tournament.services.llm import create_client
+from llm_tournament.services.llm.client import LLMClient
+
+# Preset configurations for common use cases
+SCOPE_PRESETS: dict[Literal["small", "medium", "full"], dict[str, int | None]] = {
+    "small": {
+        "max_topics": 1,
+        "max_writers": 3,
+        "max_critics": 3,
+        "rounds": 2,
+    },
+    "medium": {
+        "max_topics": 2,
+        "max_writers": 5,
+        "max_critics": 5,
+        "rounds": 5,
+    },
+    "full": {
+        "max_topics": None,
+        "max_writers": None,
+        "max_critics": None,
+        "rounds": None,
+    },
+}
 
 # Configure structlog
 structlog.configure(
@@ -61,6 +85,58 @@ def main(
     """LLM Tournament Evaluator CLI."""
 
 
+def _apply_scope_preset(
+    scope: Literal["small", "medium", "full"] | None,
+    max_topics: int | None,
+    max_writers: int | None,
+    max_critics: int | None,
+    rounds: int | None,
+) -> tuple[int | None, int | None, int | None, int | None]:
+    if scope is None:
+        return max_topics, max_writers, max_critics, rounds
+
+    preset_values = SCOPE_PRESETS[scope]
+    return (
+        max_topics if max_topics is not None else preset_values["max_topics"],
+        max_writers if max_writers is not None else preset_values["max_writers"],
+        max_critics if max_critics is not None else preset_values["max_critics"],
+        rounds if rounds is not None else preset_values["rounds"],
+    )
+
+
+def _apply_cli_overrides(
+    config: TournamentConfig,
+    simple_mode: bool | None,
+    rounds: int | None,
+    ranking_algorithm: str | None,
+) -> None:
+    if simple_mode is not None:
+        config.simple_mode = simple_mode
+    if rounds is not None:
+        config.ranking.rounds = rounds
+    if ranking_algorithm is not None:
+        config.ranking.algorithm = ranking_algorithm
+
+
+def _create_client(
+    config: TournamentConfig,
+    cache_path: Path | None,
+    use_cache: bool,
+    dry_run: bool,
+) -> LLMClient:
+    if dry_run:
+        console.print("[yellow]DRY RUN MODE - using fake LLM responses[/yellow]")
+        return create_client(dry_run=True, seed=config.seed)
+
+    api_key = config.get_api_key()
+    return create_client(
+        api_key=api_key,
+        cache_path=cache_path,
+        use_cache=use_cache,
+        dry_run=False,
+    )
+
+
 @app.command()
 def run(
     config_path: Annotated[Path, typer.Argument(help="Path to config YAML file")],
@@ -72,6 +148,10 @@ def run(
     ] = True,
     simple_mode: Annotated[
         bool | None, typer.Option("--simple-mode", help="Rank only v0 essays")
+    ] = None,
+    scope: Annotated[
+        Literal["small", "medium", "full"] | None,
+        typer.Option("--scope", help="Execution scope preset (small/medium/full)"),
     ] = None,
     max_topics: Annotated[
         int | None, typer.Option("--max-topics", help="Limit number of topics")
@@ -100,6 +180,8 @@ def run(
         dry_run: If True, use fake LLM client.
         use_cache: Whether to cache API responses.
         simple_mode: Override config simple_mode setting.
+        scope: Execution scope preset (small/medium/full). Applies predefined
+            limits for max_topics, max_writers, max_critics, and rounds.
         max_topics: Limit number of topics to process.
         max_writers: Limit number of writers.
         max_critics: Limit number of critics.
@@ -123,28 +205,15 @@ def run(
         console.print(f"[bold]Loading config:[/bold] {config_path}")
         config = load_config(config_path)
 
-        # Apply CLI overrides
-        if simple_mode is not None:
-            config.simple_mode = simple_mode
-        if rounds is not None:
-            config.ranking.rounds = rounds
-        if ranking_algorithm is not None:
-            config.ranking.algorithm = ranking_algorithm
+        max_topics, max_writers, max_critics, rounds = _apply_scope_preset(
+            scope, max_topics, max_writers, max_critics, rounds
+        )
+        _apply_cli_overrides(config, simple_mode, rounds, ranking_algorithm)
 
         # Create client
         cache_path = Path(config.output_dir) / ".cache" / "api_cache.duckdb" if use_cache else None
 
-        if dry_run:
-            console.print("[yellow]DRY RUN MODE - using fake LLM responses[/yellow]")
-            client = create_client(dry_run=True, seed=config.seed)
-        else:
-            api_key = config.get_api_key()
-            client = create_client(
-                api_key=api_key,
-                cache_path=cache_path,
-                use_cache=use_cache,
-                dry_run=False,
-            )
+        client = _create_client(config, cache_path, use_cache, dry_run)
 
         # Run tournament (async)
         console.print("[bold green]Starting tournament...[/bold green]")
@@ -173,8 +242,9 @@ def run(
     except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1) from e
-    except ValueError as e:
-        console.print(f"[red]Configuration error:[/red] {e}")
+    except ConfigurationError as e:
+        console.print(f"[red]Configuration error in {config_path}:[/red]")
+        console.print(f"[red]{e}")
         raise typer.Exit(1) from e
     except Exception as e:
         console.print(f"[red]Unexpected error:[/red] {e}")
@@ -205,6 +275,10 @@ def validate(
 
     except FileNotFoundError as e:
         console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from e
+    except ConfigurationError as e:
+        console.print(f"[red]Configuration error in {config_path}:[/red]")
+        console.print(f"[red]{e}")
         raise typer.Exit(1) from e
     except Exception as e:
         console.print(f"[red]Validation error:[/red] {e}")

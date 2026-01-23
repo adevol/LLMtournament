@@ -11,7 +11,8 @@ from collections import defaultdict
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig, safe_id
+from llm_tournament.core.config import TournamentConfig
+from llm_tournament.core.slug import SlugGenerator
 from llm_tournament.models import Rating
 from llm_tournament.prompts import analysis_system_prompt, analysis_user_prompt
 from llm_tournament.prompts.aggregation import (
@@ -84,6 +85,7 @@ class AnalysisService:
         self.client = client
         self.store = store
         self._semaphore = semaphore
+        self._slugger = SlugGenerator(max_length=None)
 
     # ==================== Per-topic analysis ====================
 
@@ -129,7 +131,7 @@ class AnalysisService:
                 self.config.judge_tokens,
                 self.config.judge_temp,
             )
-            safe_essay_id = safe_id(essay_id)
+            safe_essay_id = self._slugger.safe_id(essay_id)
             await self.store.save_report(
                 topic_slug, f"analysis_{safe_essay_id}.md", analysis.content
             )
@@ -213,7 +215,7 @@ class AnalysisService:
                 self.config.judge_tokens,
                 self.config.judge_temp,
             )
-            safe_model_id = safe_id(model_id)
+            safe_model_id = self._slugger.safe_id(model_id)
             filename = f"model_profiles/{safe_model_id}.json"
             await self.store.save_aggregation_report(filename, response.content)
 

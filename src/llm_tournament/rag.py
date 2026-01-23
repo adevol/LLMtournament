@@ -5,7 +5,6 @@ Uses markitdown for ingestion and sentence-transformers + numpy for retrieval.
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -178,45 +177,3 @@ def build_rag_context(
         )
 
     return template.format(context=context)
-
-
-def build_rag_writer(
-    model_id: str,
-    retriever: Retriever,
-    query: str,
-    name: str | None = None,
-    prompt_template: str | None = None,
-) -> dict:
-    """Create a WriterConfig dict with RAG context injected.
-
-    .. deprecated::
-        Use WriterConfig with use_rag=True and topic-level rag_queries instead.
-        This function will be removed in a future version.
-
-    Args:
-        model_id: The model identifier (e.g., "openai/gpt-4o").
-        retriever: Any object implementing the Retriever protocol.
-        query: Query to retrieve context for.
-        name: Optional display name. Defaults to "{model}-rag".
-        prompt_template: Optional template with {context} placeholder.
-
-    Returns:
-        A dict suitable for use in TournamentConfig.writers.
-    """
-    warnings.warn(
-        "build_rag_writer is deprecated. Use WriterConfig(use_rag=True) with "
-        "topic-level rag_queries instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
-    system_prompt = build_rag_context(retriever, query, prompt_template)
-
-    if name is None:
-        name = f"{model_id.split('/')[-1]}-rag"
-
-    return {
-        "model_id": model_id,
-        "name": name,
-        "system_prompt": system_prompt,
-    }
