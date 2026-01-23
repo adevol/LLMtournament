@@ -13,6 +13,7 @@ from llm_tournament.prompts import (
     writer_system_prompt,
     writer_user_prompt,
 )
+from llm_tournament.rag import build_rag_context
 from llm_tournament.services.llm import LLMClient
 from llm_tournament.services.storage import TournamentStore
 
@@ -43,7 +44,10 @@ class SubmissionService:
             writer_slug = self.config.get_writer_slug(writer)
             writer_model_id = self.config.get_writer_model_id(writer)
             system_prompt = self.config.get_writer_system_prompt(writer)
-            tasks.append(self._generate_one(topic, writer_model_id, writer_slug, system_prompt))
+            use_rag = self.config.writer_uses_rag(writer)
+            tasks.append(
+                self._generate_one(topic, writer_model_id, writer_slug, system_prompt, use_rag)
+            )
         await asyncio.gather(*tasks)
 
     async def _generate_one(
@@ -52,19 +56,29 @@ class SubmissionService:
         writer_model_id: str,
         writer_slug: str,
         system_prompt: str | None = None,
+        use_rag: bool = False,
     ) -> None:
         """Generate essay sections for a single writer."""
         prompts_map = writer_user_prompt(topic)
         sections: dict[str, str] = {}
 
         # Priority: per-writer override > config default > prompts.yaml
-        effective_system_prompt = (
+        base_system_prompt = (
             system_prompt or self.config.writer_system_prompt or writer_system_prompt()
         )
 
         async def generate_section(genre: str, prompt: str) -> None:
             async with self._semaphore:
                 logger.debug("generating_section", writer=writer_slug, genre=genre)
+
+                # Build effective system prompt with optional RAG context
+                effective_system_prompt = base_system_prompt
+                if use_rag and self.config.retriever and topic.rag_queries:
+                    rag_query = topic.rag_queries.get(genre)
+                    if rag_query:
+                        rag_context = build_rag_context(self.config.retriever, rag_query)
+                        effective_system_prompt = f"{rag_context}\n\n{base_system_prompt}"
+
                 messages = [
                     {"role": "system", "content": effective_system_prompt},
                     {"role": "user", "content": prompt},
