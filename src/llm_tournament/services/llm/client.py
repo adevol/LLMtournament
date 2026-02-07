@@ -1,8 +1,7 @@
-"""OpenRouter API client with async support, caching and retries."""
+"""OpenRouter API client with async support and retries."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import random
 from abc import ABC, abstractmethod
@@ -10,18 +9,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import duckdb
 import httpx
 import structlog
 import yaml
 from tenacity import (
+    AsyncRetrying,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
+    wait_fixed,
 )
 
-from llm_tournament.core.config import hash_messages
 from llm_tournament.services.llm.cost_tracker import CostTracker
 
 logger = structlog.get_logger()
@@ -37,6 +36,7 @@ class LLMResponse:
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    is_completed: bool | None = None
 
 
 def _load_fake_responses() -> dict[str, Any]:
@@ -150,6 +150,7 @@ class FakeLLMClient(LLMClient):
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,
+            is_completed=True,
         )
 
     def _fake_essay(self, model: str) -> str:
@@ -184,117 +185,28 @@ class FakeLLMClient(LLMClient):
         return templates["revision"].format(model=model)
 
 
-class CacheDB:
-    """DuckDB cache for API responses with async support."""
-
-    def __init__(self, db_path: Path) -> None:
-        """Initialize cache database.
-
-        Args:
-            db_path: Path to DuckDB database file.
-        """
-        self.db_path = db_path
-        self._init_db()
-
-    def _init_db(self) -> None:
-        """Create cache table if it doesn't exist."""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = duckdb.connect(str(self.db_path))
-        try:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cache (
-                    cache_key VARCHAR PRIMARY KEY,
-                    model VARCHAR NOT NULL,
-                    response VARCHAR NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-        finally:
-            conn.close()
-
-    async def get(self, key: str) -> LLMResponse | None:
-        """Get cached response (async).
-
-        Args:
-            key: Cache key (hash of messages + params).
-
-        Returns:
-            Cached LLMResponse or None if not found.
-        """
-
-        def _get() -> LLMResponse | None:
-            conn = duckdb.connect(str(self.db_path))
-            try:
-                result = conn.execute(
-                    "SELECT response FROM cache WHERE cache_key = ?", [key]
-                ).fetchone()
-                if result:
-                    data = json.loads(result[0])
-                    return LLMResponse(**data)
-                return None
-            finally:
-                conn.close()
-
-        return await asyncio.to_thread(_get)
-
-    async def set(self, key: str, model: str, response: LLMResponse) -> None:
-        """Store response in cache (async).
-
-        Args:
-            key: Cache key.
-            model: Model identifier.
-            response: LLMResponse to cache.
-        """
-
-        def _set() -> None:
-            conn = duckdb.connect(str(self.db_path))
-            try:
-                response_json = json.dumps(
-                    {
-                        "content": response.content,
-                        "prompt_tokens": response.prompt_tokens,
-                        "completion_tokens": response.completion_tokens,
-                        "total_tokens": response.total_tokens,
-                    }
-                )
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO cache (cache_key, model, response)
-                    VALUES (?, ?, ?)
-                    """,
-                    [key, model, response_json],
-                )
-            finally:
-                conn.close()
-
-        await asyncio.to_thread(_set)
+class _IncompleteResponseError(RuntimeError):
+    """Raised when the model returns an incomplete response."""
 
 
 class OpenRouterClient(LLMClient):
     """Async OpenRouter API client with caching and retries."""
 
     BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+    _INCOMPLETE_RETRIES = 2
 
     def __init__(
         self,
         api_key: str,
-        cache_db: CacheDB | None = None,
-        use_cache: bool = True,
         cost_tracker: CostTracker | None = None,
     ) -> None:
         """Initialize OpenRouter client.
 
         Args:
             api_key: OpenRouter API key.
-            cache_db: Optional cache database.
-            use_cache: Whether to use caching.
             cost_tracker: Optional cost tracker for recording API costs.
         """
         self.api_key = api_key
-        self.cache_db = cache_db
-        self.use_cache = use_cache and cache_db is not None
         self.cost_tracker = cost_tracker
         self.client = httpx.AsyncClient(timeout=120.0)
         self._total_cost = 0.0
@@ -322,35 +234,59 @@ class OpenRouterClient(LLMClient):
         Returns:
             LLMResponse with content and usage data.
         """
-        params = {"model": model, "max_tokens": max_tokens, "temperature": temperature}
-        cache_key = hash_messages(messages, params)
+        response = await self._call_with_retries(
+            model,
+            messages,
+            max_tokens,
+            temperature,
+        )
+        await self._record_cost(model, response)
+        return response
 
-        # Check cache
-        if self.use_cache and self.cache_db:
-            cached = await self.cache_db.get(cache_key)
-            if cached is not None:
-                logger.debug("cache_hit", model=model, key=cache_key[:8])
-                return cached
+    async def _record_cost(self, model: str, response: LLMResponse) -> None:
+        if not self.cost_tracker:
+            return
+        call_cost = await self.cost_tracker.record_call(
+            model,
+            response.prompt_tokens,
+            response.completion_tokens,
+            response.total_tokens,
+            role="api",
+        )
+        self._total_cost += call_cost
 
-        # Make API call
-        response = await self._call_api(model, messages, max_tokens, temperature)
+    async def _call_with_retries(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMResponse:
+        response: LLMResponse | None = None
 
-        # Record cost if tracker configured
-        if self.cost_tracker:
-            call_cost = await self.cost_tracker.record_call(
-                model,
-                response.prompt_tokens,
-                response.completion_tokens,
-                response.total_tokens,
-                role="api",
-            )
-            self._total_cost += call_cost
+        async def _attempt_call() -> LLMResponse:
+            nonlocal response
+            response = await self._call_api(model, messages, max_tokens, temperature)
+            if not response.content.strip() or not self._is_completed(response):
+                raise _IncompleteResponseError()
+            return response
 
-        # Store in cache
-        if self.use_cache and self.cache_db:
-            await self.cache_db.set(cache_key, model, response)
+        retrying = AsyncRetrying(
+            retry=retry_if_exception_type(_IncompleteResponseError),
+            wait=wait_fixed(0),
+            stop=stop_after_attempt(self._INCOMPLETE_RETRIES + 1),
+            reraise=False,
+        )
+        async for attempt in retrying:
+            with attempt:
+                await _attempt_call()
 
         return response
+
+    def _is_completed(self, response: LLMResponse) -> bool:
+        if response.is_completed is not None:
+            return response.is_completed
+        return False
 
     @retry(
         stop=stop_after_attempt(3),
@@ -399,6 +335,10 @@ class OpenRouterClient(LLMClient):
 
         data = response.json()
         content: str = data["choices"][0]["message"]["content"]
+        is_completed = None
+        finish_reason = data["choices"][0].get("finish_reason")
+        if finish_reason is not None:
+            is_completed = finish_reason != "length"
         usage = data.get("usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
@@ -415,6 +355,7 @@ class OpenRouterClient(LLMClient):
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
+            is_completed=is_completed,
         )
 
     async def close(self) -> None:
@@ -451,13 +392,10 @@ def create_client(
         msg = "API key required for real API calls"
         raise ValueError(msg)
 
-    cache_db = None
-    if cache_path:
-        cache_db = CacheDB(cache_path)
+    if cache_path or use_cache is False:
+        logger.info("cache_disabled")
 
     return OpenRouterClient(
         api_key=api_key,
-        cache_db=cache_db,
-        use_cache=use_cache,
         cost_tracker=cost_tracker,
     )
