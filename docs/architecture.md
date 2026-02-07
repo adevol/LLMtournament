@@ -33,7 +33,7 @@ A single tournament run proceeds through the following stages:
    - Load `config.yaml` and `prompts.yaml`
    - Compute config + prompt hashes
    - Initialize RNG with deterministic seed
-   - Open stores and caches
+   - Open stores
 
 2. **Submission Phase**
    - Generate initial essays (Writer LLMs)
@@ -134,7 +134,7 @@ Encapsulates business logic into distinct domains:
 
 - **`LLMClient`**: 
   - Abstract interface for LLM providers (currently OpenRouter).
-  - Handles caching (DuckDB), retries, and rate limiting.
+  - Handles retries and rate limiting.
   - Structured-output frameworks (e.g., PydanticAI) are not required; consider them only
     for judge JSON parsing and models with reliable schema support.
 
