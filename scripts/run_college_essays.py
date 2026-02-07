@@ -142,8 +142,6 @@ async def main() -> None:
 
     client = create_client(
         api_key=api_key,
-        cache_path=Path("./runs/.cache/llm_cache.duckdb"),
-        use_cache=True,
         cost_tracker=cost_tracker,
     )
 

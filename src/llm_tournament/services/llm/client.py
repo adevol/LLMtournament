@@ -36,7 +36,6 @@ class LLMResponse:
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
-    is_completed: bool | None = None
 
 
 def _load_fake_responses() -> dict[str, Any]:
@@ -150,7 +149,6 @@ class FakeLLMClient(LLMClient):
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,
-            is_completed=True,
         )
 
     def _fake_essay(self, model: str) -> str:
@@ -190,7 +188,7 @@ class _IncompleteResponseError(RuntimeError):
 
 
 class OpenRouterClient(LLMClient):
-    """Async OpenRouter API client with caching and retries."""
+    """Async OpenRouter API client with retries."""
 
     BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
     _INCOMPLETE_RETRIES = 2
@@ -267,7 +265,7 @@ class OpenRouterClient(LLMClient):
         async def _attempt_call() -> LLMResponse:
             nonlocal response
             response = await self._call_api(model, messages, max_tokens, temperature)
-            if not response.content.strip() or not self._is_completed(response):
+            if not response.content.strip():
                 raise _IncompleteResponseError()
             return response
 
@@ -275,18 +273,15 @@ class OpenRouterClient(LLMClient):
             retry=retry_if_exception_type(_IncompleteResponseError),
             wait=wait_fixed(0),
             stop=stop_after_attempt(self._INCOMPLETE_RETRIES + 1),
-            reraise=False,
+            reraise=True,
         )
         async for attempt in retrying:
             with attempt:
                 await _attempt_call()
 
+        if response is None:
+            raise _IncompleteResponseError()
         return response
-
-    def _is_completed(self, response: LLMResponse) -> bool:
-        if response.is_completed is not None:
-            return response.is_completed
-        return False
 
     @retry(
         stop=stop_after_attempt(3),
@@ -335,10 +330,6 @@ class OpenRouterClient(LLMClient):
 
         data = response.json()
         content: str = data["choices"][0]["message"]["content"]
-        is_completed = None
-        finish_reason = data["choices"][0].get("finish_reason")
-        if finish_reason is not None:
-            is_completed = finish_reason != "length"
         usage = data.get("usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
@@ -355,7 +346,6 @@ class OpenRouterClient(LLMClient):
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
-            is_completed=is_completed,
         )
 
     async def close(self) -> None:
@@ -365,8 +355,6 @@ class OpenRouterClient(LLMClient):
 
 def create_client(
     api_key: str | None = None,
-    cache_path: Path | None = None,
-    use_cache: bool = True,
     dry_run: bool = False,
     seed: int = 42,
     cost_tracker: CostTracker | None = None,
@@ -375,8 +363,6 @@ def create_client(
 
     Args:
         api_key: OpenRouter API key (required unless dry_run).
-        cache_path: Path to cache database.
-        use_cache: Whether to use caching.
         dry_run: If True, use fake client.
         seed: Random seed for fake client.
         cost_tracker: Optional cost tracker.
@@ -391,9 +377,6 @@ def create_client(
     if not api_key:
         msg = "API key required for real API calls"
         raise ValueError(msg)
-
-    if cache_path or use_cache is False:
-        logger.info("cache_disabled")
 
     return OpenRouterClient(
         api_key=api_key,
