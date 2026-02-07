@@ -172,6 +172,52 @@ class TestPipelineDryRun:
 
             store.close_sync()
 
+    async def test_convenience_function_with_limits(self):
+        """Test run_tournament applies optional topic/writer/critic limits."""
+        config = TournamentConfig(
+            writers=["test/writer-a", "test/writer-b"],
+            critics=["test/critic-a", "test/critic-b"],
+            judges=["test/judge-a", "test/judge-b"],
+            topics=[
+                TopicConfig(title="Test Topic A", prompts={"Essay": "Write essay A"}),
+                TopicConfig(title="Test Topic B", prompts={"Essay": "Write essay B"}),
+            ],
+            seed=42,
+            simple_mode=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config.output_dir = tmpdir
+            config.ranking.rounds = 1
+            client = FakeLLMClient(seed=42)
+
+            store = await run_tournament(
+                config=config,
+                client=client,
+                run_id="limit_test",
+                max_topics=1,
+                max_writers=1,
+                max_critics=1,
+            )
+
+            assert len(store.config.topics) == 1
+            assert len(store.config.writers) == 1
+            assert len(store.config.critics) == 1
+            assert (store.base_dir / "test-topic-a").exists()
+            assert not (store.base_dir / "test-topic-b").exists()
+
+            store.close_sync()
+
+    async def test_convenience_function_rejects_non_positive_limits(self, minimal_config):
+        """Test run_tournament validates optional limits."""
+        client = FakeLLMClient(seed=42)
+        with pytest.raises(ValueError, match="max_topics must be greater than 0"):
+            await run_tournament(
+                config=minimal_config,
+                client=client,
+                max_topics=0,
+            )
+
 
 class TestEssayContent:
     """Tests for essay content structure."""
