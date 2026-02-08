@@ -196,6 +196,7 @@ class OpenRouterClient(LLMClient):
     """Async OpenRouter API client with retries."""
 
     BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+    TITLE = "LLM Tournament"
     _INCOMPLETE_RETRIES = 2
 
     def __init__(
@@ -316,18 +317,8 @@ class OpenRouterClient(LLMClient):
 
         response = await self.client.post(
             self.BASE_URL,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "X-Title": "LLM Tournament",
-            },
-            json={
-                "model": model,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "stream": False,
-            },
+            headers=self._request_headers(),
+            json=self._request_payload(model, messages, max_tokens, temperature),
         )
         response.raise_for_status()
 
@@ -341,6 +332,30 @@ class OpenRouterClient(LLMClient):
             completion_tokens=parsed.completion_tokens,
         )
         return parsed
+
+    def _request_headers(self) -> dict[str, str]:
+        """Build OpenRouter request headers."""
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "X-Title": self.TITLE,
+        }
+
+    @staticmethod
+    def _request_payload(
+        model: str,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+    ) -> dict[str, Any]:
+        """Build OpenRouter request payload."""
+        return {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": False,
+        }
 
     def _parse_api_response(self, data: Any) -> LLMResponse:
         """Parse OpenRouter response payload into an LLMResponse."""
