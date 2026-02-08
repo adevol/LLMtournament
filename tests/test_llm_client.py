@@ -92,6 +92,36 @@ class TestFakeLLMClient:
 
         assert actual_next == expected_next
 
+    async def test_complete_prompt_builds_standard_messages(self):
+        """complete_prompt should behave like a direct system+user complete call."""
+        model = "test"
+        system_prompt = "You are a pairwise judge."
+        user_prompt = "Compare Essay A and Essay B and return winner in JSON."
+        max_tokens = 100
+        temperature = 0.7
+
+        direct_client = FakeLLMClient(seed=42)
+        helper_client = FakeLLMClient(seed=42)
+
+        direct = await direct_client.complete(
+            model,
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens,
+            temperature,
+        )
+        via_helper = await helper_client.complete_prompt(
+            model,
+            system_prompt,
+            user_prompt,
+            max_tokens,
+            temperature,
+        )
+
+        assert direct == via_helper
+
 
 class TestOpenRouterClientRetry:
     """Tests for OpenRouter retry behavior."""

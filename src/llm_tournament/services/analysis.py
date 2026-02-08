@@ -120,14 +120,10 @@ class AnalysisService:
 
             summaries = [build_match_summary(m, essay_id) for m in matches]
 
-            messages = [
-                {"role": "system", "content": analysis_system_prompt()},
-                {"role": "user", "content": analysis_user_prompt(essay_id, summaries)},
-            ]
-
-            analysis = await self.client.complete(
+            analysis = await self.client.complete_prompt(
                 self.config.judges[0],
-                messages,
+                analysis_system_prompt(),
+                analysis_user_prompt(essay_id, summaries),
                 self.config.judge_tokens,
                 self.config.judge_temp,
             )
@@ -202,16 +198,10 @@ class AnalysisService:
     async def _profile_single_model(self, model_id: str, results: list[dict]) -> None:
         """Generate profile for one model."""
         async with self._semaphore:
-            messages = [
-                {"role": "system", "content": model_profile_system_prompt()},
-                {
-                    "role": "user",
-                    "content": model_profile_user_prompt(model_id, results),
-                },
-            ]
-            response = await self.client.complete(
+            response = await self.client.complete_prompt(
                 self.config.judges[0],
-                messages,
+                model_profile_system_prompt(),
+                model_profile_user_prompt(model_id, results),
                 self.config.judge_tokens,
                 self.config.judge_temp,
             )
@@ -224,19 +214,10 @@ class AnalysisService:
         model_profiles_text = "(Model profiles generated in individual files)"
 
         async with self._semaphore:
-            messages = [
-                {"role": "system", "content": cross_topic_insights_system_prompt()},
-                {
-                    "role": "user",
-                    "content": cross_topic_insights_user_prompt(
-                        ranking_summary, model_profiles_text
-                    ),
-                },
-            ]
-
-            response = await self.client.complete(
+            response = await self.client.complete_prompt(
                 self.config.judges[0],
-                messages,
+                cross_topic_insights_system_prompt(),
+                cross_topic_insights_user_prompt(ranking_summary, model_profiles_text),
                 self.config.judge_tokens,
                 self.config.judge_temp,
             )

@@ -14,7 +14,7 @@ from llm_tournament.prompts import (
     writer_user_prompt,
 )
 from llm_tournament.rag import build_rag_context
-from llm_tournament.services.llm import LLMClient, LLMMessages
+from llm_tournament.services.llm import LLMClient
 from llm_tournament.services.storage import TournamentStore
 
 logger = structlog.get_logger()
@@ -79,13 +79,10 @@ class SubmissionService:
                         rag_context = build_rag_context(self.config.retriever, rag_query)
                         effective_system_prompt = f"{rag_context}\n\n{base_system_prompt}"
 
-                messages: LLMMessages = [
-                    {"role": "system", "content": effective_system_prompt},
-                    {"role": "user", "content": prompt},
-                ]
-                content = await self.client.complete(
+                content = await self.client.complete_prompt(
                     writer_model_id,
-                    messages,
+                    effective_system_prompt,
+                    prompt,
                     self.config.writer_tokens,
                     self.config.writer_temp,
                 )
@@ -123,13 +120,10 @@ class SubmissionService:
         async with self._semaphore:
             logger.debug("generating_critique", writer=writer_slug, critic=critic_slug)
             essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
-            messages: LLMMessages = [
-                {"role": "system", "content": critic_system_prompt()},
-                {"role": "user", "content": critic_user_prompt(essay)},
-            ]
-            feedback = await self.client.complete(
+            feedback = await self.client.complete_prompt(
                 critic_id,
-                messages,
+                critic_system_prompt(),
+                critic_user_prompt(essay),
                 self.config.critic_tokens,
                 self.config.critic_temp,
             )
@@ -157,16 +151,10 @@ class SubmissionService:
             logger.debug("generating_revision", writer=writer_slug, critic=critic_slug)
             original_essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
             feedback = await self.store.load_feedback(topic_slug, writer_slug, critic_slug)
-            messages: LLMMessages = [
-                {"role": "system", "content": revision_system_prompt()},
-                {
-                    "role": "user",
-                    "content": revision_user_prompt(original_essay, feedback),
-                },
-            ]
-            revised = await self.client.complete(
+            revised = await self.client.complete_prompt(
                 writer_model_id,
-                messages,
+                revision_system_prompt(),
+                revision_user_prompt(original_essay, feedback),
                 self.config.revision_tokens,
                 self.config.revision_temp,
             )

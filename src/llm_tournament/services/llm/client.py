@@ -93,6 +93,26 @@ class LLMClient(ABC):
         """Whether this client instance is configured to track API cost."""
         return False
 
+    @staticmethod
+    def build_messages(system_prompt: str, user_prompt: str) -> LLMMessages:
+        """Build standard system+user message payload."""
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    async def complete_prompt(
+        self,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMResponse:
+        """Generate a completion from system and user prompts."""
+        messages = self.build_messages(system_prompt, user_prompt)
+        return await self.complete(model, messages, max_tokens, temperature)
+
     async def close(self) -> None:  # noqa: B027
         """Close any resources. Override if needed."""
 

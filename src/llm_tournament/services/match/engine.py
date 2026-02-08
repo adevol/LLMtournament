@@ -29,7 +29,7 @@ from llm_tournament.prompts import (
     judge_system_prompt,
     judge_user_prompt,
 )
-from llm_tournament.services.llm import LLMClient, LLMMessages
+from llm_tournament.services.llm import LLMClient
 
 logger = structlog.get_logger()
 
@@ -143,22 +143,18 @@ def repair_json(broken_json: str) -> str:
     return text.replace("'", '"')
 
 
-def _build_judge_messages(context: MatchContext, strict: bool) -> LLMMessages:
-    """Build judge messages for a judgment request.
+def _build_judge_user_prompt(context: MatchContext, strict: bool) -> str:
+    """Build judge user prompt for a judgment request.
 
     Args:
         context: MatchContext with essay text.
         strict: Whether to use strict retry prompt.
 
     Returns:
-        List of message dicts.
+        Prompt text for the user message.
     """
     prompt = judge_strict_retry_prompt if strict else judge_user_prompt
-    system_prompt = context.custom_judge_system_prompt or judge_system_prompt()
-    return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt(context.essay_a, context.essay_b)},
-    ]
+    return prompt(context.essay_a, context.essay_b)
 
 
 async def _request_judgment(
@@ -178,8 +174,15 @@ async def _request_judgment(
     Returns:
         Raw response string from the model.
     """
-    messages = _build_judge_messages(context, strict)
-    response = await client.complete(judge_model, messages, context.max_tokens, context.temperature)
+    system_prompt = context.custom_judge_system_prompt or judge_system_prompt()
+    user_prompt = _build_judge_user_prompt(context, strict)
+    response = await client.complete_prompt(
+        judge_model,
+        system_prompt,
+        user_prompt,
+        context.max_tokens,
+        context.temperature,
+    )
     return response.content
 
 
