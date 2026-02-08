@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from tenacity import RetryError
 
 from llm_tournament.services.llm.client import (
     FakeLLMClient,
@@ -138,7 +137,7 @@ class TestOpenRouterClientRetry:
     async def test_openrouter_request_error_exhausts_after_three_attempts(
         self, monkeypatch: pytest.MonkeyPatch
     ):
-        """Raises RetryError with request error cause after exhausting retries."""
+        """Raises request error after exhausting retries."""
         client = OpenRouterClient(api_key="test-key")
         request = httpx.Request("POST", OpenRouterClient.BASE_URL)
         post_mock = AsyncMock(
@@ -147,14 +146,13 @@ class TestOpenRouterClientRetry:
         monkeypatch.setattr(client.client, "post", post_mock)
 
         try:
-            with pytest.raises(RetryError) as exc_info:
+            with pytest.raises(httpx.ConnectTimeout):
                 await client.complete(
                     "test/model",
                     [{"role": "user", "content": "hello"}],
                     100,
                     0.7,
                 )
-            assert isinstance(exc_info.value.last_attempt.exception(), httpx.ConnectTimeout)
             assert post_mock.await_count == 3
         finally:
             await client.close()
