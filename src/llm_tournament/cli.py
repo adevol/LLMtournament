@@ -120,8 +120,6 @@ def _apply_cli_overrides(
 
 def _create_client(
     config: TournamentConfig,
-    cache_path: Path | None,
-    use_cache: bool,
     dry_run: bool,
 ) -> LLMClient:
     if dry_run:
@@ -131,8 +129,6 @@ def _create_client(
     api_key = config.get_api_key()
     return create_client(
         api_key=api_key,
-        cache_path=cache_path,
-        use_cache=use_cache,
         dry_run=False,
     )
 
@@ -143,9 +139,6 @@ def run(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Use fake LLM responses, no API calls")
     ] = False,
-    use_cache: Annotated[
-        bool, typer.Option("--use-cache/--no-cache", help="Use cached API responses")
-    ] = True,
     simple_mode: Annotated[
         bool | None, typer.Option("--simple-mode", help="Rank only v0 essays")
     ] = None,
@@ -178,7 +171,6 @@ def run(
     Args:
         config_path: Path to YAML configuration file.
         dry_run: If True, use fake LLM client.
-        use_cache: Whether to cache API responses.
         simple_mode: Override config simple_mode setting.
         scope: Execution scope preset (small/medium/full). Applies predefined
             limits for max_topics, max_writers, max_critics, and rounds.
@@ -211,9 +203,7 @@ def run(
         _apply_cli_overrides(config, simple_mode, rounds, ranking_algorithm)
 
         # Create client
-        cache_path = Path(config.output_dir) / ".cache" / "api_cache.duckdb" if use_cache else None
-
-        client = _create_client(config, cache_path, use_cache, dry_run)
+        client = _create_client(config, dry_run)
 
         # Run tournament (async)
         console.print("[bold green]Starting tournament...[/bold green]")

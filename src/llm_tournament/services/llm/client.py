@@ -1,32 +1,41 @@
-"""OpenRouter API client with async support, caching and retries."""
+"""OpenRouter API client with async support and retries."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias, TypedDict
 
-import duckdb
 import httpx
 import structlog
 import yaml
 from tenacity import (
+    AsyncRetrying,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
+    wait_fixed,
 )
 
-from llm_tournament.core.config import hash_messages
 from llm_tournament.services.llm.cost_tracker import CostTracker
 
 logger = structlog.get_logger()
 
 _FAKE_RESPONSES_PATH = Path(__file__).parent / "fake_responses.yaml"
+
+
+class LLMMessage(TypedDict):
+    """Single chat message entry for LLM APIs."""
+
+    role: str
+    content: str
+
+
+LLMMessages: TypeAlias = list[LLMMessage]
 
 
 @dataclass(frozen=True)
@@ -58,7 +67,7 @@ class LLMClient(ABC):
     async def complete(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         max_tokens: int,
         temperature: float,
     ) -> LLMResponse:
@@ -77,7 +86,32 @@ class LLMClient(ABC):
     @property
     @abstractmethod
     def total_cost(self) -> float:
-        """Return total cost of all API calls made by this client."""
+        """Return total tracked cost of API calls made by this client."""
+
+    @property
+    def cost_tracking_enabled(self) -> bool:
+        """Whether this client instance is configured to track API cost."""
+        return False
+
+    @staticmethod
+    def build_messages(system_prompt: str, user_prompt: str) -> LLMMessages:
+        """Build standard system+user message payload."""
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    async def complete_prompt(
+        self,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMResponse:
+        """Generate a completion from system and user prompts."""
+        messages = self.build_messages(system_prompt, user_prompt)
+        return await self.complete(model, messages, max_tokens, temperature)
 
     async def close(self) -> None:  # noqa: B027
         """Close any resources. Override if needed."""
@@ -94,6 +128,7 @@ class FakeLLMClient(LLMClient):
         """
         self.seed = seed
         self.call_count = 0
+        self._rng = random.Random(seed)  # noqa: S311
 
     @property
     def total_cost(self) -> float:
@@ -103,7 +138,7 @@ class FakeLLMClient(LLMClient):
     async def complete(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         _max_tokens: int,
         _temperature: float,
     ) -> LLMResponse:
@@ -165,9 +200,8 @@ class FakeLLMClient(LLMClient):
     def _fake_judgment(self) -> str:
         """Generate fake judgment JSON."""
         templates = _load_fake_responses()
-        random.seed(self.seed + self.call_count)
-        winner = random.choice(["A", "B"])  # noqa: S311
-        confidence = round(random.uniform(0.6, 0.95), 2)  # noqa: S311
+        winner = self._rng.choice(["A", "B"])
+        confidence = round(self._rng.uniform(0.6, 0.95), 2)
         judgment = templates["judgment"]
         return json.dumps(
             {
@@ -184,130 +218,47 @@ class FakeLLMClient(LLMClient):
         return templates["revision"].format(model=model)
 
 
-class CacheDB:
-    """DuckDB cache for API responses with async support."""
-
-    def __init__(self, db_path: Path) -> None:
-        """Initialize cache database.
-
-        Args:
-            db_path: Path to DuckDB database file.
-        """
-        self.db_path = db_path
-        self._init_db()
-
-    def _init_db(self) -> None:
-        """Create cache table if it doesn't exist."""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = duckdb.connect(str(self.db_path))
-        try:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cache (
-                    cache_key VARCHAR PRIMARY KEY,
-                    model VARCHAR NOT NULL,
-                    response VARCHAR NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """
-            )
-        finally:
-            conn.close()
-
-    async def get(self, key: str) -> LLMResponse | None:
-        """Get cached response (async).
-
-        Args:
-            key: Cache key (hash of messages + params).
-
-        Returns:
-            Cached LLMResponse or None if not found.
-        """
-
-        def _get() -> LLMResponse | None:
-            conn = duckdb.connect(str(self.db_path))
-            try:
-                result = conn.execute(
-                    "SELECT response FROM cache WHERE cache_key = ?", [key]
-                ).fetchone()
-                if result:
-                    data = json.loads(result[0])
-                    return LLMResponse(**data)
-                return None
-            finally:
-                conn.close()
-
-        return await asyncio.to_thread(_get)
-
-    async def set(self, key: str, model: str, response: LLMResponse) -> None:
-        """Store response in cache (async).
-
-        Args:
-            key: Cache key.
-            model: Model identifier.
-            response: LLMResponse to cache.
-        """
-
-        def _set() -> None:
-            conn = duckdb.connect(str(self.db_path))
-            try:
-                response_json = json.dumps(
-                    {
-                        "content": response.content,
-                        "prompt_tokens": response.prompt_tokens,
-                        "completion_tokens": response.completion_tokens,
-                        "total_tokens": response.total_tokens,
-                    }
-                )
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO cache (cache_key, model, response)
-                    VALUES (?, ?, ?)
-                    """,
-                    [key, model, response_json],
-                )
-            finally:
-                conn.close()
-
-        await asyncio.to_thread(_set)
+class IncompleteResponseError(RuntimeError):
+    """Raised when the model returns an incomplete response."""
 
 
 class OpenRouterClient(LLMClient):
-    """Async OpenRouter API client with caching and retries."""
+    """Async OpenRouter API client with retries."""
 
     BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+    TITLE = "LLM Tournament"
+    _INCOMPLETE_RETRIES = 2
 
     def __init__(
         self,
         api_key: str,
-        cache_db: CacheDB | None = None,
-        use_cache: bool = True,
         cost_tracker: CostTracker | None = None,
     ) -> None:
         """Initialize OpenRouter client.
 
         Args:
             api_key: OpenRouter API key.
-            cache_db: Optional cache database.
-            use_cache: Whether to use caching.
             cost_tracker: Optional cost tracker for recording API costs.
         """
         self.api_key = api_key
-        self.cache_db = cache_db
-        self.use_cache = use_cache and cache_db is not None
         self.cost_tracker = cost_tracker
         self.client = httpx.AsyncClient(timeout=120.0)
         self._total_cost = 0.0
 
     @property
     def total_cost(self) -> float:
-        """Return total accumulated cost."""
+        """Return total accumulated tracked cost."""
         return self._total_cost
+
+    @property
+    def cost_tracking_enabled(self) -> bool:
+        """Whether call cost tracking is configured."""
+        return self.cost_tracker is not None
 
     async def complete(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         max_tokens: int,
         temperature: float,
     ) -> LLMResponse:
@@ -322,45 +273,59 @@ class OpenRouterClient(LLMClient):
         Returns:
             LLMResponse with content and usage data.
         """
-        params = {"model": model, "max_tokens": max_tokens, "temperature": temperature}
-        cache_key = hash_messages(messages, params)
-
-        # Check cache
-        if self.use_cache and self.cache_db:
-            cached = await self.cache_db.get(cache_key)
-            if cached is not None:
-                logger.debug("cache_hit", model=model, key=cache_key[:8])
-                return cached
-
-        # Make API call
-        response = await self._call_api(model, messages, max_tokens, temperature)
-
-        # Record cost if tracker configured
-        if self.cost_tracker:
-            call_cost = await self.cost_tracker.record_call(
-                model,
-                response.prompt_tokens,
-                response.completion_tokens,
-                response.total_tokens,
-                role="api",
-            )
-            self._total_cost += call_cost
-
-        # Store in cache
-        if self.use_cache and self.cache_db:
-            await self.cache_db.set(cache_key, model, response)
-
+        response = await self._call_with_retries(
+            model,
+            messages,
+            max_tokens,
+            temperature,
+        )
+        await self._record_cost(model, response)
         return response
+
+    async def _record_cost(self, model: str, response: LLMResponse) -> None:
+        if not self.cost_tracker:
+            return
+        call_cost = await self.cost_tracker.record_call(
+            model,
+            response.prompt_tokens,
+            response.completion_tokens,
+            response.total_tokens,
+            role="api",
+        )
+        self._total_cost += call_cost
+
+    async def _call_with_retries(
+        self,
+        model: str,
+        messages: LLMMessages,
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMResponse:
+        retrying = AsyncRetrying(
+            retry=retry_if_exception_type(IncompleteResponseError),
+            wait=wait_fixed(0),
+            stop=stop_after_attempt(self._INCOMPLETE_RETRIES + 1),
+            reraise=True,
+        )
+        async for attempt in retrying:
+            with attempt:
+                response = await self._call_api(model, messages, max_tokens, temperature)
+                if not response.content.strip():
+                    raise IncompleteResponseError()
+                return response
+
+        raise IncompleteResponseError()
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=30),
-        retry=retry_if_exception_type(httpx.HTTPStatusError),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError)),
+        reraise=True,
     )
     async def _call_api(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         max_tokens: int,
         temperature: float,
     ) -> LLMResponse:
@@ -376,46 +341,88 @@ class OpenRouterClient(LLMClient):
             LLMResponse with content and usage data.
 
         Raises:
-            httpx.HTTPStatusError: On API error after retries.
+            httpx.HTTPStatusError: On HTTP API error after retries.
+            httpx.RequestError: On network/transport error after retries.
         """
         logger.info("api_call", model=model, max_tokens=max_tokens)
 
         response = await self.client.post(
             self.BASE_URL,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "X-Title": "LLM Tournament",
-            },
-            json={
-                "model": model,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "stream": False,
-            },
+            headers=self._request_headers(),
+            json=self._request_payload(model, messages, max_tokens, temperature),
         )
         response.raise_for_status()
 
         data = response.json()
-        content: str = data["choices"][0]["message"]["content"]
-        usage = data.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+        parsed = self._parse_api_response(data)
 
         logger.debug(
             "api_response",
             model=model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
+            prompt_tokens=parsed.prompt_tokens,
+            completion_tokens=parsed.completion_tokens,
         )
+        return parsed
+
+    def _request_headers(self) -> dict[str, str]:
+        """Build OpenRouter request headers."""
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "X-Title": self.TITLE,
+        }
+
+    @staticmethod
+    def _request_payload(
+        model: str,
+        messages: LLMMessages,
+        max_tokens: int,
+        temperature: float,
+    ) -> dict[str, Any]:
+        """Build OpenRouter request payload."""
+        return {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": False,
+        }
+
+    def _parse_api_response(self, data: Any) -> LLMResponse:
+        """Parse OpenRouter response payload into an LLMResponse."""
+        if not isinstance(data, dict):
+            msg = "Malformed OpenRouter response: expected top-level JSON object"
+            raise TypeError(msg)
+
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            msg = "Malformed OpenRouter response: missing choices[0].message.content"
+            raise ValueError(msg) from exc
+
+        if not isinstance(content, str):
+            msg = "Malformed OpenRouter response: choices[0].message.content must be a string"
+            raise TypeError(msg)
+
+        usage_raw = data.get("usage", {})
+        usage = usage_raw if isinstance(usage_raw, dict) else {}
+        prompt_tokens = self._to_int(usage.get("prompt_tokens", 0))
+        completion_tokens = self._to_int(usage.get("completion_tokens", 0))
+        total_tokens = self._to_int(usage.get("total_tokens", prompt_tokens + completion_tokens))
         return LLMResponse(
             content=content,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
         )
+
+    @staticmethod
+    def _to_int(value: Any) -> int:
+        """Convert numeric-like API fields to int with safe fallback."""
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     async def close(self) -> None:
         """Close HTTP client."""
@@ -424,8 +431,6 @@ class OpenRouterClient(LLMClient):
 
 def create_client(
     api_key: str | None = None,
-    cache_path: Path | None = None,
-    use_cache: bool = True,
     dry_run: bool = False,
     seed: int = 42,
     cost_tracker: CostTracker | None = None,
@@ -434,8 +439,6 @@ def create_client(
 
     Args:
         api_key: OpenRouter API key (required unless dry_run).
-        cache_path: Path to cache database.
-        use_cache: Whether to use caching.
         dry_run: If True, use fake client.
         seed: Random seed for fake client.
         cost_tracker: Optional cost tracker.
@@ -451,13 +454,7 @@ def create_client(
         msg = "API key required for real API calls"
         raise ValueError(msg)
 
-    cache_db = None
-    if cache_path:
-        cache_db = CacheDB(cache_path)
-
     return OpenRouterClient(
         api_key=api_key,
-        cache_db=cache_db,
-        use_cache=use_cache,
         cost_tracker=cost_tracker,
     )

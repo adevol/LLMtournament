@@ -206,8 +206,6 @@ classDiagram
 
         class OpenRouterClient {
             +api_key: str
-            +cache_db: CacheDB | None
-            +use_cache: bool
             +client: AsyncClient
             +complete(model, messages, max_tokens, temperature)
             +close()
@@ -217,12 +215,6 @@ classDiagram
             +seed: int
             +call_count: int
             +complete(model, messages, max_tokens, temperature)
-        }
-
-        class CacheDB {
-            +db_path: Path
-            +get(key)
-            +set(key, model, response)
         }
 
         class PricingService {
@@ -258,7 +250,6 @@ classDiagram
 
     LLMClientABC <|-- OpenRouterClient
     LLMClientABC <|-- FakeLLMClient
-    OpenRouterClient o-- CacheDB
     OpenRouterClient o-- CostTracker
     PricingService o-- ModelPricing
     CostTracker --> PricingService
@@ -418,7 +409,7 @@ classDiagram
 | `core/config.py` | TournamentConfig, TopicConfig, RankingConfig, WriterConfig |
 | `models/` | Match, Rating, LLMCall |
 | `ranking/` | RankingSystem (protocol), EloSystem, EloRating, TrueSkillSystem, TrueSkillRating |
-| `services/llm/` | LLMResponse, LLMClient, OpenRouterClient, FakeLLMClient, CacheDB, PricingService, ModelPricing, CostTracker |
+| `services/llm/` | LLMResponse, LLMClient, OpenRouterClient, FakeLLMClient, PricingService, ModelPricing, CostTracker |
 | `services/storage/` | TournamentStore |
 | `services/match/` | MatchService, JudgeRotation, JudgeResult, MatchContext, MatchResult, Candidate |
 | `services/` | SubmissionService, AnalysisService |

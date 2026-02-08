@@ -3,10 +3,12 @@
 import pytest
 
 from llm_tournament.services.llm import FakeLLMClient
+from llm_tournament.services.llm.client import IncompleteResponseError, LLMClient, LLMResponse
 from llm_tournament.services.match.engine import (
     JudgeRotation,
     _parse_with_repair,
     _summarize_votes,
+    run_match_parallel_majority,
     run_match_with_audit,
 )
 
@@ -46,3 +48,46 @@ async def test_run_match_with_audit_requires_judges():
             max_tokens=10,
             temperature=0.2,
         )
+
+
+class _FlakyJudgeClient(LLMClient):
+    @property
+    def total_cost(self) -> float:
+        return 0.0
+
+    async def complete(
+        self,
+        model: str,
+        _messages,
+        _max_tokens: int,
+        _temperature: float,
+    ) -> LLMResponse:
+        if model == "bad/judge":
+            raise IncompleteResponseError()
+        return LLMResponse(
+            content='{"winner":"A","confidence":0.8,"reasons":["clear"],"winner_edge":"better"}',
+            prompt_tokens=10,
+            completion_tokens=10,
+            total_tokens=20,
+        )
+
+
+@pytest.mark.asyncio
+async def test_parallel_majority_tolerates_single_judge_incomplete_response():
+    client = _FlakyJudgeClient()
+
+    result = await run_match_parallel_majority(
+        client=client,
+        essay_a="Essay A",
+        essay_b="Essay B",
+        essay_a_id="a",
+        essay_b_id="b",
+        primary_judges=["bad/judge", "good/judge-1", "good/judge-2"],
+        sub_judges=[],
+        confidence_threshold=0.7,
+        max_tokens=100,
+        temperature=0.2,
+    )
+
+    assert result.winner == "A"
+    assert result.final_decision == "parallel_majority_3"

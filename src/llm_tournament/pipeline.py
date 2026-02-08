@@ -6,7 +6,7 @@ import asyncio
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig, calculate_nr_rounds
+from llm_tournament.core.config import CriticSpec, TournamentConfig, WriterSpec, calculate_nr_rounds
 from llm_tournament.core.progress import TournamentProgress
 from llm_tournament.ranking import RankingSystem, create_ranking_system
 from llm_tournament.services.analysis import AnalysisService
@@ -54,10 +54,12 @@ class TournamentPipeline:
         self.progress = TournamentProgress()
 
         self.judges = config.judges
+        self.writer_specs: list[WriterSpec] = self.config.get_writer_specs()
+        self.critic_specs: list[CriticSpec] = self.config.get_critic_specs()
 
-        # Slugify model IDs (supports both string and WriterConfig)
-        self.writer_slugs = [self.config.get_writer_slug(w) for w in self.config.writers]
-        self.critic_slugs = [self.config.get_slug_model(c) for c in self.config.critics]
+        # Slugify model IDs once and reuse across services.
+        self.writer_slugs = [writer.slug for writer in self.writer_specs]
+        self.critic_slugs = [critic.slug for critic in self.critic_specs]
 
         # Initialize services
         self.submission_service = SubmissionService(config, client, store, self._semaphore)
@@ -92,19 +94,19 @@ class TournamentPipeline:
 
         # Generation
         logger.info("stage_generation", topic=topic_slug)
-        await self.submission_service.run_generation_batch(topic, self.config.writers)
+        await self.submission_service.run_generation_batch(topic, self.writer_specs)
 
         if not self.config.simple_mode:
             # Critique
             logger.info("stage_critique", topic=topic_slug)
             await self.submission_service.run_critique_batch(
-                topic, self.config.writers, self.config.critics
+                topic, self.writer_specs, self.critic_specs
             )
 
             # Revision
             logger.info("stage_revision", topic=topic_slug)
             await self.submission_service.run_revision_batch(
-                topic, self.config.writers, self.config.critics
+                topic, self.writer_specs, self.critic_specs
             )
 
         # Ranking
@@ -204,6 +206,9 @@ async def run_tournament(
     config: TournamentConfig,
     client: LLMClient,
     run_id: str | None = None,
+    max_topics: int | None = None,
+    max_writers: int | None = None,
+    max_critics: int | None = None,
     max_concurrency: int = 5,
 ) -> TournamentStore:
     """Convenience function to run a complete tournament.
@@ -212,13 +217,34 @@ async def run_tournament(
         config: Tournament configuration.
         client: Async LLM client.
         run_id: Optional run ID.
+        max_topics: Optional limit on number of topics to run.
+        max_writers: Optional limit on number of writers to run.
+        max_critics: Optional limit on number of critics to run.
         max_concurrency: Maximum concurrent API calls.
 
     Returns:
         TournamentStore with all artifacts.
     """
-    store = TournamentStore(config, run_id)
-    pipeline = TournamentPipeline(config, client, store, max_concurrency)
+    limits = {
+        "max_topics": max_topics,
+        "max_writers": max_writers,
+        "max_critics": max_critics,
+    }
+    for limit_name, limit_value in limits.items():
+        if limit_value is not None and limit_value <= 0:
+            msg = f"{limit_name} must be greater than 0"
+            raise ValueError(msg)
+
+    effective_config = config.model_copy(
+        update={
+            "topics": config.topics[:max_topics] if max_topics is not None else config.topics,
+            "writers": config.writers[:max_writers] if max_writers is not None else config.writers,
+            "critics": config.critics[:max_critics] if max_critics is not None else config.critics,
+        }
+    )
+
+    store = TournamentStore(effective_config, run_id)
+    pipeline = TournamentPipeline(effective_config, client, store, max_concurrency)
     await pipeline.run()
 
     if client.total_cost > 0:

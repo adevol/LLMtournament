@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
@@ -81,6 +82,24 @@ class WriterConfig(BaseModel):
             hash_content=hash_content,
             suffix=suffix,
         )
+
+
+@dataclass(frozen=True)
+class WriterSpec:
+    """Normalized writer participant data."""
+
+    model_id: str
+    slug: str
+    system_prompt: str | None = None
+    use_rag: bool = False
+
+
+@dataclass(frozen=True)
+class CriticSpec:
+    """Normalized critic participant data."""
+
+    model_id: str
+    slug: str
 
 
 class RankingConfig(BaseModel):
@@ -214,6 +233,28 @@ class TournamentConfig(BaseModel):
         if isinstance(writer, WriterConfig):
             return writer.use_rag
         return False
+
+    def get_writer_spec(self, writer: str | WriterConfig) -> WriterSpec:
+        """Normalize a writer into reusable writer participant metadata."""
+        return WriterSpec(
+            model_id=self.get_writer_model_id(writer),
+            slug=self.get_writer_slug(writer),
+            system_prompt=self.get_writer_system_prompt(writer),
+            use_rag=self.writer_uses_rag(writer),
+        )
+
+    def get_writer_specs(self, writers: list[str | WriterConfig] | None = None) -> list[WriterSpec]:
+        """Return normalized writer specs."""
+        source_writers = writers if writers is not None else self.writers
+        return [self.get_writer_spec(writer) for writer in source_writers]
+
+    def get_critic_specs(self, critics: list[str] | None = None) -> list[CriticSpec]:
+        """Return normalized critic specs."""
+        source_critics = critics if critics is not None else self.critics
+        return [
+            CriticSpec(model_id=critic_model_id, slug=self.get_slug_model(critic_model_id))
+            for critic_model_id in source_critics
+        ]
 
     def get_slug_topic(self, title: str, max_length: int | None = None) -> str:
         """Convert a topic title to a URL-safe slug."""

@@ -100,29 +100,56 @@ class TournamentStore:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _v0_dir(self, topic_slug: str) -> Path:
-        """Get or create v0 essays directory."""
-        path = self.topic_dir(topic_slug) / "v0"
+    def _topic_subdir(self, topic_slug: str, subdir: str) -> Path:
+        """Get or create a topic subdirectory."""
+        path = self.topic_dir(topic_slug) / subdir
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _feedback_dir(self, topic_slug: str) -> Path:
-        """Get or create feedback directory."""
-        path = self.topic_dir(topic_slug) / "feedback"
-        path.mkdir(parents=True, exist_ok=True)
+    def _essay_path(self, topic_slug: str, essay_id: str, version: str) -> Path:
+        """Build path to an essay markdown file."""
+        subdir = "v0" if version == "v0" else "v1"
+        return self._topic_subdir(topic_slug, subdir) / f"{essay_id}.md"
+
+    def _feedback_path(self, topic_slug: str, writer_slug: str, critic_slug: str) -> Path:
+        """Build path to a feedback markdown file."""
+        return self._topic_subdir(topic_slug, "feedback") / f"{writer_slug}__{critic_slug}.md"
+
+    def _revision_path(self, topic_slug: str, writer_slug: str, critic_slug: str) -> Path:
+        """Build path to a revised essay markdown file."""
+        return self._topic_subdir(topic_slug, "v1") / f"{writer_slug}__{critic_slug}.md"
+
+    def _ranking_path(self, topic_slug: str, filename: str) -> Path:
+        """Build path to a ranking artifact file."""
+        return self._topic_subdir(topic_slug, "ranking") / filename
+
+    def _aggregation_path(self, filename: str) -> Path:
+        """Build path to a cross-topic aggregation artifact."""
+        output_dir = self.base_dir / "final_analysis"
+        output_dir.mkdir(exist_ok=True, parents=True)
+        path = output_dir / filename
+        path.parent.mkdir(exist_ok=True, parents=True)
         return path
 
-    def _v1_dir(self, topic_slug: str) -> Path:
-        """Get or create v1 essays directory."""
-        path = self.topic_dir(topic_slug) / "v1"
-        path.mkdir(parents=True, exist_ok=True)
+    @staticmethod
+    def _write_text(path: Path, content: str) -> Path:
+        """Write text content to a file path."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
         return path
 
-    def _ranking_dir(self, topic_slug: str) -> Path:
-        """Get or create ranking directory."""
-        path = self.topic_dir(topic_slug) / "ranking"
-        path.mkdir(parents=True, exist_ok=True)
-        return path
+    @staticmethod
+    def _read_text(path: Path) -> str:
+        """Read text content from a file path."""
+        return path.read_text(encoding="utf-8")
+
+    async def _write_text_async(self, path: Path, content: str) -> Path:
+        """Async wrapper for text file writes."""
+        return await asyncio.to_thread(self._write_text, path, content)
+
+    async def _read_text_async(self, path: Path) -> str:
+        """Async wrapper for text file reads."""
+        return await asyncio.to_thread(self._read_text, path)
 
     # ==================== Essay operations ====================
 
@@ -130,60 +157,38 @@ class TournamentStore:
         self, topic_slug: str, writer_slug: str, content: str, version: str
     ) -> Path:
         """Save an essay to file."""
-
-        def _save() -> Path:
-            directory = self._v0_dir(topic_slug) if version == "v0" else self._v1_dir(topic_slug)
-            path = directory / f"{writer_slug}.md"
-            path.write_text(content, encoding="utf-8")
-            logger.debug("saved_essay", path=str(path))
-            return path
-
-        return await asyncio.to_thread(_save)
+        path = self._essay_path(topic_slug, writer_slug, version)
+        saved_path = await self._write_text_async(path, content)
+        logger.debug("saved_essay", path=str(saved_path))
+        return saved_path
 
     async def load_essay(self, topic_slug: str, essay_id: str, version: str) -> str:
         """Load an essay from file."""
-
-        def _load() -> str:
-            directory = self._v0_dir(topic_slug) if version == "v0" else self._v1_dir(topic_slug)
-            path = directory / f"{essay_id}.md"
-            return path.read_text(encoding="utf-8")
-
-        return await asyncio.to_thread(_load)
+        path = self._essay_path(topic_slug, essay_id, version)
+        return await self._read_text_async(path)
 
     async def save_feedback(
         self, topic_slug: str, writer_slug: str, critic_slug: str, content: str
     ) -> Path:
         """Save feedback to file."""
-
-        def _save() -> Path:
-            path = self._feedback_dir(topic_slug) / f"{writer_slug}__{critic_slug}.md"
-            path.write_text(content, encoding="utf-8")
-            logger.debug("saved_feedback", path=str(path))
-            return path
-
-        return await asyncio.to_thread(_save)
+        path = self._feedback_path(topic_slug, writer_slug, critic_slug)
+        saved_path = await self._write_text_async(path, content)
+        logger.debug("saved_feedback", path=str(saved_path))
+        return saved_path
 
     async def load_feedback(self, topic_slug: str, writer_slug: str, critic_slug: str) -> str:
         """Load feedback from file."""
-
-        def _load() -> str:
-            path = self._feedback_dir(topic_slug) / f"{writer_slug}__{critic_slug}.md"
-            return path.read_text(encoding="utf-8")
-
-        return await asyncio.to_thread(_load)
+        path = self._feedback_path(topic_slug, writer_slug, critic_slug)
+        return await self._read_text_async(path)
 
     async def save_revision(
         self, topic_slug: str, writer_slug: str, critic_slug: str, content: str
     ) -> Path:
         """Save revised essay to file."""
-
-        def _save() -> Path:
-            path = self._v1_dir(topic_slug) / f"{writer_slug}__{critic_slug}.md"
-            path.write_text(content, encoding="utf-8")
-            logger.debug("saved_revision", path=str(path))
-            return path
-
-        return await asyncio.to_thread(_save)
+        path = self._revision_path(topic_slug, writer_slug, critic_slug)
+        saved_path = await self._write_text_async(path, content)
+        logger.debug("saved_revision", path=str(saved_path))
+        return saved_path
 
     # ==================== Match/Rating operations ====================
 
@@ -202,8 +207,7 @@ class TournamentStore:
                 session.add(match)
                 session.commit()
 
-            ranking_dir = self._ranking_dir(topic_slug)
-            jsonl_path = ranking_dir / "matches.jsonl"
+            jsonl_path = self._ranking_path(topic_slug, "matches.jsonl")
             with jsonl_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(data, default=str) + "\n")
 
@@ -278,14 +282,9 @@ class TournamentStore:
 
     async def save_report(self, topic_slug: str, filename: str, content: str) -> None:
         """Save a generic report file (Markdown/Text)."""
-
-        def _save() -> None:
-            ranking_dir = self._ranking_dir(topic_slug)
-            path = ranking_dir / filename
-            path.write_text(content, encoding="utf-8")
-            logger.debug("saved_report", path=str(path))
-
-        await asyncio.to_thread(_save)
+        path = self._ranking_path(topic_slug, filename)
+        await self._write_text_async(path, content)
+        logger.debug("saved_report", path=str(path))
 
     async def save_ranking_output(
         self, topic_slug: str, leaderboard: list[Any], _ranking_system: Any
@@ -293,9 +292,7 @@ class TournamentStore:
         """Save leaderboard to text/csv files for human consumption."""
 
         def _save() -> None:
-            ranking_dir = self._ranking_dir(topic_slug)
-
-            md_path = ranking_dir / "leaderboard.md"
+            md_path = self._ranking_path(topic_slug, "leaderboard.md")
             with md_path.open("w", encoding="utf-8") as f:
                 f.write(f"# Leaderboard: {topic_slug}\n\n")
                 f.write("| Rank | Candidate | Rating | Matches | Wins | Losses |\n")
@@ -306,7 +303,7 @@ class TournamentStore:
                         f"{r.matches} | {r.wins} | {r.losses} |\n"
                     )
 
-            csv_path = ranking_dir / "leaderboard.csv"
+            csv_path = self._ranking_path(topic_slug, "leaderboard.csv")
             with csv_path.open("w", encoding="utf-8", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(
@@ -343,8 +340,7 @@ class TournamentStore:
         """Export leaderboard to JSON for dashboard consumption."""
 
         def _save() -> None:
-            ranking_dir = self._ranking_dir(topic_slug)
-            json_path = ranking_dir / "leaderboard.json"
+            json_path = self._ranking_path(topic_slug, "leaderboard.json")
             data = [r.model_dump() if hasattr(r, "model_dump") else dict(r) for r in leaderboard]
             with json_path.open("w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
@@ -353,18 +349,9 @@ class TournamentStore:
 
     async def save_aggregation_report(self, filename: str, content: str) -> None:
         """Save a cross-topic aggregation report file."""
-
-        def _save() -> None:
-            output_dir = self.base_dir / "final_analysis"
-            output_dir.mkdir(exist_ok=True, parents=True)
-            path = output_dir / filename
-            output_dir_subdir = path.parent
-            output_dir_subdir.mkdir(exist_ok=True, parents=True)
-
-            path.write_text(content, encoding="utf-8")
-            logger.debug("saved_aggregation_report", path=str(path))
-
-        await asyncio.to_thread(_save)
+        path = self._aggregation_path(filename)
+        await self._write_text_async(path, content)
+        logger.debug("saved_aggregation_report", path=str(path))
 
     # ==================== Lifecycle ====================
 

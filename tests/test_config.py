@@ -8,9 +8,11 @@ import pytest
 import yaml
 
 from llm_tournament.core.config import (
+    CriticSpec,
     TopicConfig,
     TournamentConfig,
     WriterConfig,
+    WriterSpec,
     hash_messages,
     load_config,
 )
@@ -309,3 +311,43 @@ class TestTournamentConfigWriterHelpers:
         assert len(config.writers) == 2
         assert isinstance(config.writers[0], str)
         assert isinstance(config.writers[1], WriterConfig)
+
+    def test_get_writer_specs_normalizes_metadata(self):
+        """Test get_writer_specs builds reusable normalized writer data."""
+        writer = WriterConfig(
+            model_id="openai/gpt-4",
+            system_prompt="Custom prompt",
+            use_rag=True,
+        )
+        config = TournamentConfig(
+            writers=["anthropic/claude-3", writer],
+            critics=["model/b"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+
+        specs = config.get_writer_specs()
+
+        assert specs[0] == WriterSpec(
+            model_id="anthropic/claude-3",
+            slug="anthropic__claude-3",
+            system_prompt=None,
+            use_rag=False,
+        )
+        assert specs[1].model_id == "openai/gpt-4"
+        assert specs[1].slug.startswith("openai__gpt-4_")
+        assert specs[1].system_prompt == "Custom prompt"
+        assert specs[1].use_rag is True
+
+    def test_get_critic_specs_normalizes_metadata(self):
+        """Test get_critic_specs builds reusable normalized critic data."""
+        config = TournamentConfig(
+            writers=["model/a"],
+            critics=["openai/gpt-4"],
+            judges=["model/c"],
+            topics=[TopicConfig(title="Test", prompts={"Essay": "test"})],
+        )
+
+        specs = config.get_critic_specs()
+
+        assert specs == [CriticSpec(model_id="openai/gpt-4", slug="openai__gpt-4")]

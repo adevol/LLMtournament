@@ -5,7 +5,6 @@ from llm_tournament.prompts import get_prompt_group
 
 def _get_aggregation_prompts() -> dict[str, dict[str, str]]:
     """Safe getter for nested aggregation prompts."""
-    # Ensure backward compatibility if prompts are missing or file reload is needed
     return get_prompt_group("aggregation")
 
 
