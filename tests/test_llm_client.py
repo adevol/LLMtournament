@@ -195,6 +195,33 @@ class TestOpenRouterClientRetry:
         finally:
             await client.close()
 
+    async def test_openrouter_http_status_error_exhausts_after_three_attempts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Raises HTTP status error after exhausting retries."""
+        client = OpenRouterClient(api_key="test-key")
+        request = httpx.Request("POST", OpenRouterClient.BASE_URL)
+        post_mock = AsyncMock(
+            side_effect=[
+                httpx.Response(500, request=request, json={"error": "server error"}),
+                httpx.Response(500, request=request, json={"error": "server error"}),
+                httpx.Response(500, request=request, json={"error": "server error"}),
+            ]
+        )
+        monkeypatch.setattr(client.client, "post", post_mock)
+
+        try:
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.complete(
+                    "test/model",
+                    [{"role": "user", "content": "hello"}],
+                    100,
+                    0.7,
+                )
+            assert post_mock.await_count == 3
+        finally:
+            await client.close()
+
     async def test_openrouter_cost_tracking_flag_without_tracker(self):
         """OpenRouter client exposes disabled cost tracking by default."""
         client = OpenRouterClient(api_key="test-key")
