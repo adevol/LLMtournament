@@ -22,12 +22,10 @@ load_dotenv()
 ASSETS_DIR = Path(__file__).resolve().parent / "college_assets"
 
 WRITERS = [
-    "minimax/minimax-m2.1",
     "z-ai/glm-4.7",
     "moonshotai/kimi-k2-thinking",
     "openai/gpt-5-mini",
     "google/gemini-3-flash-preview",
-    "deepseek/deepseek-v3.2",
 ]
 
 CRITICS = WRITERS
@@ -114,10 +112,10 @@ async def main() -> None:
         output_dir=str(Path("./runs")),
         simple_mode=False,
         seed=2026,
-        writer_tokens=2200,
-        critic_tokens=900,
-        revision_tokens=2200,
-        judge_tokens=1200,
+        writer_tokens=5000,
+        critic_tokens=1900,
+        revision_tokens=5000,
+        judge_tokens=3000,
         ranking={
             "rounds": 7,
             "algorithm": "trueskill",
