@@ -286,7 +286,7 @@ class OpenRouterClient(LLMClient):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=30),
-        retry=retry_if_exception_type(httpx.HTTPStatusError),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError)),
     )
     async def _call_api(
         self,
@@ -307,7 +307,8 @@ class OpenRouterClient(LLMClient):
             LLMResponse with content and usage data.
 
         Raises:
-            httpx.HTTPStatusError: On API error after retries.
+            httpx.HTTPStatusError: On HTTP API error after retries.
+            httpx.RequestError: On network/transport error after retries.
         """
         logger.info("api_call", model=model, max_tokens=max_tokens)
 

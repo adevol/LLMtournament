@@ -1,8 +1,13 @@
 """Tests for fake LLM client behavior."""
 
 import json
+from unittest.mock import AsyncMock
 
-from llm_tournament.services.llm.client import FakeLLMClient, LLMResponse
+import httpx
+import pytest
+from tenacity import RetryError
+
+from llm_tournament.services.llm.client import FakeLLMClient, LLMResponse, OpenRouterClient
 
 
 class TestFakeLLMClient:
@@ -62,3 +67,107 @@ class TestFakeLLMClient:
         assert 0 <= data["confidence"] <= 1
         assert isinstance(data["reasons"], list)
         assert "winner_edge" in data
+
+
+class TestOpenRouterClientRetry:
+    """Tests for OpenRouter retry behavior."""
+
+    async def test_openrouter_retries_on_request_error_then_succeeds(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Retries transient request errors and succeeds on a later attempt."""
+        client = OpenRouterClient(api_key="test-key")
+        request = httpx.Request("POST", OpenRouterClient.BASE_URL)
+        response_ok = httpx.Response(
+            200,
+            request=request,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                },
+            },
+        )
+        post_mock = AsyncMock(
+            side_effect=[
+                httpx.ConnectTimeout("timeout", request=request),
+                response_ok,
+            ]
+        )
+        monkeypatch.setattr(client.client, "post", post_mock)
+
+        try:
+            result = await client.complete(
+                "test/model",
+                [{"role": "user", "content": "hello"}],
+                100,
+                0.7,
+            )
+            assert result.content == "ok"
+            assert post_mock.await_count == 2
+        finally:
+            await client.close()
+
+    async def test_openrouter_request_error_exhausts_after_three_attempts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Raises RetryError with request error cause after exhausting retries."""
+        client = OpenRouterClient(api_key="test-key")
+        request = httpx.Request("POST", OpenRouterClient.BASE_URL)
+        post_mock = AsyncMock(
+            side_effect=httpx.ConnectTimeout("timeout", request=request),
+        )
+        monkeypatch.setattr(client.client, "post", post_mock)
+
+        try:
+            with pytest.raises(RetryError) as exc_info:
+                await client.complete(
+                    "test/model",
+                    [{"role": "user", "content": "hello"}],
+                    100,
+                    0.7,
+                )
+            assert isinstance(exc_info.value.last_attempt.exception(), httpx.ConnectTimeout)
+            assert post_mock.await_count == 3
+        finally:
+            await client.close()
+
+    async def test_openrouter_still_retries_http_status_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Keeps retry behavior for HTTP status errors."""
+        client = OpenRouterClient(api_key="test-key")
+        request = httpx.Request("POST", OpenRouterClient.BASE_URL)
+        response_500 = httpx.Response(
+            500,
+            request=request,
+            json={"error": "server error"},
+        )
+        response_ok = httpx.Response(
+            200,
+            request=request,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                },
+            },
+        )
+        post_mock = AsyncMock(side_effect=[response_500, response_ok])
+        monkeypatch.setattr(client.client, "post", post_mock)
+
+        try:
+            result = await client.complete(
+                "test/model",
+                [{"role": "user", "content": "hello"}],
+                100,
+                0.7,
+            )
+            assert result.content == "ok"
+            assert post_mock.await_count == 2
+        finally:
+            await client.close()
