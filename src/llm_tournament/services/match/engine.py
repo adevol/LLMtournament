@@ -29,7 +29,7 @@ from llm_tournament.prompts import (
     judge_system_prompt,
     judge_user_prompt,
 )
-from llm_tournament.services.llm import LLMClient, complete_from_prompts
+from llm_tournament.services.llm import IncompleteResponseError, LLMClient
 
 logger = structlog.get_logger()
 
@@ -176,8 +176,7 @@ async def _request_judgment(
     """
     system_prompt = context.custom_judge_system_prompt or judge_system_prompt()
     user_prompt = _build_judge_user_prompt(context, strict)
-    response = await complete_from_prompts(
-        client,
+    response = await client.complete_prompt(
         judge_model,
         system_prompt,
         user_prompt,
@@ -415,7 +414,28 @@ async def _run_parallel_judges(
         )
         for judge in judges
     ]
-    return await asyncio.gather(*tasks)
+    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+    results: list[JudgeResult] = []
+    errors: list[Exception] = []
+    for result in raw_results:
+        if isinstance(result, Exception):
+            errors.append(result)
+            continue
+        results.append(result)
+
+    for error in errors:
+        logger.warning(
+            "parallel_judge_failed",
+            error_type=type(error).__name__,
+            error=str(error),
+        )
+
+    if not results:
+        if errors:
+            raise errors[0]
+        raise ValueError("At least one successful judge result is required")
+
+    return results
 
 
 async def judge_match(
@@ -442,29 +462,31 @@ async def judge_match(
     try:
         response = await _request_judgment(client, judge_model, context, False)
         return parse_judge_response(response)
+    except IncompleteResponseError:
+        logger.warning("judge_incomplete_response", judge=judge_model, retrying=True)
     except ValueError:
         logger.warning("judge_parse_failed", judge=judge_model, retrying=True)
 
-        try:
-            response = await _request_judgment(client, judge_model, context, True)
-            return _parse_with_repair(response)
-        except ValueError:
-            fallback = _next_fallback_judge(rotation, attempted)
-            if fallback:
-                logger.warning(
-                    "judge_fallback",
-                    failed_judge=judge_model,
-                    fallback_judge=fallback,
-                )
-                attempted.add(fallback)
-                return await judge_match(
-                    client,
-                    context,
-                    fallback,
-                    rotation,
-                    attempted,
-                )
-            raise
+    try:
+        response = await _request_judgment(client, judge_model, context, True)
+        return _parse_with_repair(response)
+    except (ValueError, IncompleteResponseError):
+        fallback = _next_fallback_judge(rotation, attempted)
+        if fallback:
+            logger.warning(
+                "judge_fallback",
+                failed_judge=judge_model,
+                fallback_judge=fallback,
+            )
+            attempted.add(fallback)
+            return await judge_match(
+                client,
+                context,
+                fallback,
+                rotation,
+                attempted,
+            )
+        raise
 
 
 async def run_match_with_audit(
