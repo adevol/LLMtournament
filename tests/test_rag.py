@@ -9,6 +9,7 @@ import pytest
 from llm_tournament.core.config import TopicConfig, TournamentConfig, WriterConfig
 from llm_tournament.prompts import writer_system_prompt
 from llm_tournament.rag import RAGSystem, Retriever, build_rag_context, chunk_text
+from llm_tournament.services.llm import LLMClient
 from llm_tournament.services.llm.client import LLMMessages, LLMResponse
 from llm_tournament.services.submission import SubmissionService
 
@@ -103,7 +104,7 @@ class DummyRetriever:
         return f"retrieved:{query}"
 
 
-class CapturingLLMClient:
+class CapturingLLMClient(LLMClient):
     """LLM client stub that captures messages for assertions."""
 
     def __init__(self) -> None:
@@ -159,7 +160,7 @@ class TestRAGWorkflow:
         store = DummyStore()
         service = SubmissionService(config, client, store, asyncio.Semaphore(1))
 
-        await service.run_generation_batch(topic, config.writers)
+        await service.run_generation_batch(topic, config.get_writer_specs())
 
         assert client.messages, "Expected at least one LLM call"
         system_prompt = client.messages[0][0]["content"]
@@ -188,7 +189,7 @@ class TestRAGWorkflow:
         store = DummyStore()
         service = SubmissionService(config, client, store, asyncio.Semaphore(1))
 
-        await service.run_generation_batch(topic, config.writers)
+        await service.run_generation_batch(topic, config.get_writer_specs())
 
         assert client.messages, "Expected at least one LLM call"
         system_prompt = client.messages[0][0]["content"]

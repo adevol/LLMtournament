@@ -7,7 +7,7 @@ import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, TypeAlias, TypedDict
+from typing import Any, TypeAlias, TypedDict
 
 import httpx
 import structlog
@@ -46,18 +46,6 @@ class LLMResponse:
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
-
-
-class SupportsLLMCompletion(Protocol):
-    """Duck-typed protocol for clients that support completion calls."""
-
-    async def complete(
-        self,
-        model: str,
-        messages: LLMMessages,
-        max_tokens: int,
-        temperature: float,
-    ) -> LLMResponse: ...
 
 
 def _load_fake_responses() -> dict[str, Any]:
@@ -127,28 +115,6 @@ class LLMClient(ABC):
 
     async def close(self) -> None:  # noqa: B027
         """Close any resources. Override if needed."""
-
-
-async def complete_from_prompts(
-    client: SupportsLLMCompletion,
-    model: str,
-    system_prompt: str,
-    user_prompt: str,
-    max_tokens: int,
-    temperature: float,
-) -> LLMResponse:
-    """Generate a completion from system+user prompts for any compatible client."""
-    complete_prompt = getattr(client, "complete_prompt", None)
-    if callable(complete_prompt):
-        return await complete_prompt(
-            model,
-            system_prompt,
-            user_prompt,
-            max_tokens,
-            temperature,
-        )
-    messages = LLMClient.build_messages(system_prompt, user_prompt)
-    return await client.complete(model, messages, max_tokens, temperature)
 
 
 class FakeLLMClient(LLMClient):
@@ -252,7 +218,7 @@ class FakeLLMClient(LLMClient):
         return templates["revision"].format(model=model)
 
 
-class _IncompleteResponseError(RuntimeError):
+class IncompleteResponseError(RuntimeError):
     """Raised when the model returns an incomplete response."""
 
 
@@ -336,7 +302,7 @@ class OpenRouterClient(LLMClient):
         temperature: float,
     ) -> LLMResponse:
         retrying = AsyncRetrying(
-            retry=retry_if_exception_type(_IncompleteResponseError),
+            retry=retry_if_exception_type(IncompleteResponseError),
             wait=wait_fixed(0),
             stop=stop_after_attempt(self._INCOMPLETE_RETRIES + 1),
             reraise=True,
@@ -345,10 +311,10 @@ class OpenRouterClient(LLMClient):
             with attempt:
                 response = await self._call_api(model, messages, max_tokens, temperature)
                 if not response.content.strip():
-                    raise _IncompleteResponseError()
+                    raise IncompleteResponseError()
                 return response
 
-        raise _IncompleteResponseError()
+        raise IncompleteResponseError()
 
     @retry(
         stop=stop_after_attempt(3),

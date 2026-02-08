@@ -21,7 +21,7 @@ from llm_tournament.prompts.aggregation import (
     model_profile_system_prompt,
     model_profile_user_prompt,
 )
-from llm_tournament.services.llm import LLMClient, complete_from_prompts
+from llm_tournament.services.llm import LLMClient
 from llm_tournament.services.storage import TournamentStore
 
 logger = structlog.get_logger()
@@ -120,8 +120,7 @@ class AnalysisService:
 
             summaries = [build_match_summary(m, essay_id) for m in matches]
 
-            analysis = await complete_from_prompts(
-                self.client,
+            analysis = await self.client.complete_prompt(
                 self.config.judges[0],
                 analysis_system_prompt(),
                 analysis_user_prompt(essay_id, summaries),
@@ -199,8 +198,7 @@ class AnalysisService:
     async def _profile_single_model(self, model_id: str, results: list[dict]) -> None:
         """Generate profile for one model."""
         async with self._semaphore:
-            response = await complete_from_prompts(
-                self.client,
+            response = await self.client.complete_prompt(
                 self.config.judges[0],
                 model_profile_system_prompt(),
                 model_profile_user_prompt(model_id, results),
@@ -216,8 +214,7 @@ class AnalysisService:
         model_profiles_text = "(Model profiles generated in individual files)"
 
         async with self._semaphore:
-            response = await complete_from_prompts(
-                self.client,
+            response = await self.client.complete_prompt(
                 self.config.judges[0],
                 cross_topic_insights_system_prompt(),
                 cross_topic_insights_user_prompt(ranking_summary, model_profiles_text),

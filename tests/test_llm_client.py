@@ -9,9 +9,9 @@ import pytest
 
 from llm_tournament.services.llm.client import (
     FakeLLMClient,
+    IncompleteResponseError,
     LLMResponse,
     OpenRouterClient,
-    _IncompleteResponseError,
 )
 
 
@@ -308,7 +308,7 @@ class TestOpenRouterClientRetry:
         monkeypatch.setattr(client, "_call_api", call_api_mock)
 
         try:
-            with pytest.raises(_IncompleteResponseError):
+            with pytest.raises(IncompleteResponseError):
                 await client.complete(
                     "test/model",
                     [{"role": "user", "content": "hello"}],
