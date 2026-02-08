@@ -263,3 +263,67 @@ class TestOpenRouterClientRetry:
             assert call_api_mock.await_count == 3
         finally:
             await client.close()
+
+    async def test_openrouter_raises_clear_error_on_malformed_response(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Malformed successful responses raise clear parse errors."""
+        client = OpenRouterClient(api_key="test-key")
+        request = httpx.Request("POST", OpenRouterClient.BASE_URL)
+        malformed = httpx.Response(
+            200,
+            request=request,
+            json={"choices": []},
+        )
+        post_mock = AsyncMock(return_value=malformed)
+        monkeypatch.setattr(client.client, "post", post_mock)
+
+        try:
+            with pytest.raises(
+                ValueError,
+                match=r"Malformed OpenRouter response: missing choices\[0\]\.message\.content",
+            ):
+                await client.complete(
+                    "test/model",
+                    [{"role": "user", "content": "hello"}],
+                    100,
+                    0.7,
+                )
+            assert post_mock.await_count == 1
+        finally:
+            await client.close()
+
+    async def test_openrouter_handles_non_numeric_usage_fields(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Non-numeric usage fields are safely coerced to zero."""
+        client = OpenRouterClient(api_key="test-key")
+        request = httpx.Request("POST", OpenRouterClient.BASE_URL)
+        response_ok = httpx.Response(
+            200,
+            request=request,
+            json={
+                "choices": [{"message": {"content": "ok"}}],
+                "usage": {
+                    "prompt_tokens": "not-a-number",
+                    "completion_tokens": None,
+                    "total_tokens": "3.14",
+                },
+            },
+        )
+        post_mock = AsyncMock(return_value=response_ok)
+        monkeypatch.setattr(client.client, "post", post_mock)
+
+        try:
+            result = await client.complete(
+                "test/model",
+                [{"role": "user", "content": "hello"}],
+                100,
+                0.7,
+            )
+            assert result.content == "ok"
+            assert result.prompt_tokens == 0
+            assert result.completion_tokens == 0
+            assert result.total_tokens == 0
+        finally:
+            await client.close()

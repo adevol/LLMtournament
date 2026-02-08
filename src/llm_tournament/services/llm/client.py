@@ -332,24 +332,51 @@ class OpenRouterClient(LLMClient):
         response.raise_for_status()
 
         data = response.json()
-        content: str = data["choices"][0]["message"]["content"]
-        usage = data.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+        parsed = self._parse_api_response(data)
 
         logger.debug(
             "api_response",
             model=model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
+            prompt_tokens=parsed.prompt_tokens,
+            completion_tokens=parsed.completion_tokens,
         )
+        return parsed
+
+    def _parse_api_response(self, data: Any) -> LLMResponse:
+        """Parse OpenRouter response payload into an LLMResponse."""
+        if not isinstance(data, dict):
+            msg = "Malformed OpenRouter response: expected top-level JSON object"
+            raise TypeError(msg)
+
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            msg = "Malformed OpenRouter response: missing choices[0].message.content"
+            raise ValueError(msg) from exc
+
+        if not isinstance(content, str):
+            msg = "Malformed OpenRouter response: choices[0].message.content must be a string"
+            raise TypeError(msg)
+
+        usage_raw = data.get("usage", {})
+        usage = usage_raw if isinstance(usage_raw, dict) else {}
+        prompt_tokens = self._to_int(usage.get("prompt_tokens", 0))
+        completion_tokens = self._to_int(usage.get("completion_tokens", 0))
+        total_tokens = self._to_int(usage.get("total_tokens", prompt_tokens + completion_tokens))
         return LLMResponse(
             content=content,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
         )
+
+    @staticmethod
+    def _to_int(value: Any) -> int:
+        """Convert numeric-like API fields to int with safe fallback."""
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
 
     async def close(self) -> None:
         """Close HTTP client."""
