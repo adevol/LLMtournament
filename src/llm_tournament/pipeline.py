@@ -6,7 +6,7 @@ import asyncio
 
 import structlog
 
-from llm_tournament.core.config import TournamentConfig, calculate_nr_rounds
+from llm_tournament.core.config import CriticSpec, TournamentConfig, WriterSpec, calculate_nr_rounds
 from llm_tournament.core.progress import TournamentProgress
 from llm_tournament.ranking import RankingSystem, create_ranking_system
 from llm_tournament.services.analysis import AnalysisService
@@ -54,10 +54,12 @@ class TournamentPipeline:
         self.progress = TournamentProgress()
 
         self.judges = config.judges
+        self.writer_specs: list[WriterSpec] = self.config.get_writer_specs()
+        self.critic_specs: list[CriticSpec] = self.config.get_critic_specs()
 
-        # Slugify model IDs (supports both string and WriterConfig)
-        self.writer_slugs = [self.config.get_writer_slug(w) for w in self.config.writers]
-        self.critic_slugs = [self.config.get_slug_model(c) for c in self.config.critics]
+        # Slugify model IDs once and reuse across services.
+        self.writer_slugs = [writer.slug for writer in self.writer_specs]
+        self.critic_slugs = [critic.slug for critic in self.critic_specs]
 
         # Initialize services
         self.submission_service = SubmissionService(config, client, store, self._semaphore)
@@ -92,19 +94,19 @@ class TournamentPipeline:
 
         # Generation
         logger.info("stage_generation", topic=topic_slug)
-        await self.submission_service.run_generation_batch(topic, self.config.writers)
+        await self.submission_service.run_generation_batch(topic, self.writer_specs)
 
         if not self.config.simple_mode:
             # Critique
             logger.info("stage_critique", topic=topic_slug)
             await self.submission_service.run_critique_batch(
-                topic, self.config.writers, self.config.critics
+                topic, self.writer_specs, self.critic_specs
             )
 
             # Revision
             logger.info("stage_revision", topic=topic_slug)
             await self.submission_service.run_revision_batch(
-                topic, self.config.writers, self.config.critics
+                topic, self.writer_specs, self.critic_specs
             )
 
         # Ranking

@@ -4,7 +4,7 @@ import asyncio
 
 import structlog
 
-from llm_tournament.core.config import TopicConfig, TournamentConfig, WriterConfig
+from llm_tournament.core.config import CriticSpec, TopicConfig, TournamentConfig, WriterSpec
 from llm_tournament.prompts import (
     critic_system_prompt,
     critic_user_prompt,
@@ -35,18 +35,18 @@ class SubmissionService:
         self.store = store
         self._semaphore = semaphore
 
-    async def run_generation_batch(
-        self, topic: TopicConfig, writers: list[str | WriterConfig]
-    ) -> None:
+    async def run_generation_batch(self, topic: TopicConfig, writers: list[WriterSpec]) -> None:
         """Generate essays for all writers on a topic."""
         tasks = []
         for writer in writers:
-            writer_slug = self.config.get_writer_slug(writer)
-            writer_model_id = self.config.get_writer_model_id(writer)
-            system_prompt = self.config.get_writer_system_prompt(writer)
-            use_rag = self.config.writer_uses_rag(writer)
             tasks.append(
-                self._generate_one(topic, writer_model_id, writer_slug, system_prompt, use_rag)
+                self._generate_one(
+                    topic,
+                    writer.model_id,
+                    writer.slug,
+                    writer.system_prompt,
+                    writer.use_rag,
+                )
             )
         await asyncio.gather(*tasks)
 
@@ -102,16 +102,15 @@ class SubmissionService:
         await self.store.save_essay(topic.slug, writer_slug, full_essay, "v0")
 
     async def run_critique_batch(
-        self, topic: TopicConfig, writers: list[str | WriterConfig], critics: list[str]
+        self, topic: TopicConfig, writers: list[WriterSpec], critics: list[CriticSpec]
     ) -> None:
         """Generate critiques for all writer-critic combinations."""
-        writer_slugs = [self.config.get_writer_slug(w) for w in writers]
-        critic_slugs = [self.config.get_slug_model(c) for c in critics]
-
         tasks = []
-        for writer_slug in writer_slugs:
-            for critic_id, critic_slug in zip(critics, critic_slugs, strict=True):
-                tasks.append(self._critique_one(topic.slug, writer_slug, critic_id, critic_slug))
+        for writer in writers:
+            for critic in critics:
+                tasks.append(
+                    self._critique_one(topic.slug, writer.slug, critic.model_id, critic.slug)
+                )
         await asyncio.gather(*tasks)
 
     async def _critique_one(
@@ -130,17 +129,14 @@ class SubmissionService:
             await self.store.save_feedback(topic_slug, writer_slug, critic_slug, feedback.content)
 
     async def run_revision_batch(
-        self, topic: TopicConfig, writers: list[str | WriterConfig], critics: list[str]
+        self, topic: TopicConfig, writers: list[WriterSpec], critics: list[CriticSpec]
     ) -> None:
         """Generate revisions for all writer-critic combinations."""
         tasks = []
         for writer in writers:
-            writer_slug = self.config.get_writer_slug(writer)
-            writer_model_id = self.config.get_writer_model_id(writer)
             for critic in critics:
-                critic_slug = self.config.get_slug_model(critic)
                 tasks.append(
-                    self._revise_one(topic.slug, writer_model_id, writer_slug, critic_slug)
+                    self._revise_one(topic.slug, writer.model_id, writer.slug, critic.slug)
                 )
         await asyncio.gather(*tasks)
 
