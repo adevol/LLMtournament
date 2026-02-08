@@ -1,4 +1,12 @@
-from .client import FakeLLMClient, LLMClient, LLMMessage, LLMMessages, LLMResponse, create_client
+from .client import (
+    FakeLLMClient,
+    LLMClient,
+    LLMMessage,
+    LLMMessages,
+    LLMResponse,
+    complete_from_prompts,
+    create_client,
+)
 from .cost_tracker import CostTracker
 from .pricing import ModelPricing, PricingService
 
@@ -11,5 +19,6 @@ __all__ = [
     "LLMResponse",
     "ModelPricing",
     "PricingService",
+    "complete_from_prompts",
     "create_client",
 ]

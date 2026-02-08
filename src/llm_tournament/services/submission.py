@@ -4,7 +4,13 @@ import asyncio
 
 import structlog
 
-from llm_tournament.core.config import CriticSpec, TopicConfig, TournamentConfig, WriterSpec
+from llm_tournament.core.config import (
+    CriticSpec,
+    TopicConfig,
+    TournamentConfig,
+    WriterConfig,
+    WriterSpec,
+)
 from llm_tournament.prompts import (
     critic_system_prompt,
     critic_user_prompt,
@@ -14,7 +20,7 @@ from llm_tournament.prompts import (
     writer_user_prompt,
 )
 from llm_tournament.rag import build_rag_context
-from llm_tournament.services.llm import LLMClient
+from llm_tournament.services.llm import LLMClient, complete_from_prompts
 from llm_tournament.services.storage import TournamentStore
 
 logger = structlog.get_logger()
@@ -35,10 +41,27 @@ class SubmissionService:
         self.store = store
         self._semaphore = semaphore
 
-    async def run_generation_batch(self, topic: TopicConfig, writers: list[WriterSpec]) -> None:
+    def _normalize_writer_specs(
+        self, writers: list[WriterSpec] | list[str | WriterConfig]
+    ) -> list[WriterSpec]:
+        """Accept normalized writer specs or raw config-style writer entries."""
+        if writers and isinstance(writers[0], WriterSpec):
+            return writers
+        return self.config.get_writer_specs(writers)
+
+    def _normalize_critic_specs(self, critics: list[CriticSpec] | list[str]) -> list[CriticSpec]:
+        """Accept normalized critic specs or raw critic model IDs."""
+        if critics and isinstance(critics[0], CriticSpec):
+            return critics
+        return self.config.get_critic_specs(critics)
+
+    async def run_generation_batch(
+        self, topic: TopicConfig, writers: list[WriterSpec] | list[str | WriterConfig]
+    ) -> None:
         """Generate essays for all writers on a topic."""
+        writer_specs = self._normalize_writer_specs(writers)
         tasks = []
-        for writer in writers:
+        for writer in writer_specs:
             tasks.append(
                 self._generate_one(
                     topic,
@@ -79,7 +102,8 @@ class SubmissionService:
                         rag_context = build_rag_context(self.config.retriever, rag_query)
                         effective_system_prompt = f"{rag_context}\n\n{base_system_prompt}"
 
-                content = await self.client.complete_prompt(
+                content = await complete_from_prompts(
+                    self.client,
                     writer_model_id,
                     effective_system_prompt,
                     prompt,
@@ -102,12 +126,17 @@ class SubmissionService:
         await self.store.save_essay(topic.slug, writer_slug, full_essay, "v0")
 
     async def run_critique_batch(
-        self, topic: TopicConfig, writers: list[WriterSpec], critics: list[CriticSpec]
+        self,
+        topic: TopicConfig,
+        writers: list[WriterSpec] | list[str | WriterConfig],
+        critics: list[CriticSpec] | list[str],
     ) -> None:
         """Generate critiques for all writer-critic combinations."""
+        writer_specs = self._normalize_writer_specs(writers)
+        critic_specs = self._normalize_critic_specs(critics)
         tasks = []
-        for writer in writers:
-            for critic in critics:
+        for writer in writer_specs:
+            for critic in critic_specs:
                 tasks.append(
                     self._critique_one(topic.slug, writer.slug, critic.model_id, critic.slug)
                 )
@@ -119,7 +148,8 @@ class SubmissionService:
         async with self._semaphore:
             logger.debug("generating_critique", writer=writer_slug, critic=critic_slug)
             essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
-            feedback = await self.client.complete_prompt(
+            feedback = await complete_from_prompts(
+                self.client,
                 critic_id,
                 critic_system_prompt(),
                 critic_user_prompt(essay),
@@ -129,12 +159,17 @@ class SubmissionService:
             await self.store.save_feedback(topic_slug, writer_slug, critic_slug, feedback.content)
 
     async def run_revision_batch(
-        self, topic: TopicConfig, writers: list[WriterSpec], critics: list[CriticSpec]
+        self,
+        topic: TopicConfig,
+        writers: list[WriterSpec] | list[str | WriterConfig],
+        critics: list[CriticSpec] | list[str],
     ) -> None:
         """Generate revisions for all writer-critic combinations."""
+        writer_specs = self._normalize_writer_specs(writers)
+        critic_specs = self._normalize_critic_specs(critics)
         tasks = []
-        for writer in writers:
-            for critic in critics:
+        for writer in writer_specs:
+            for critic in critic_specs:
                 tasks.append(
                     self._revise_one(topic.slug, writer.model_id, writer.slug, critic.slug)
                 )
@@ -147,7 +182,8 @@ class SubmissionService:
             logger.debug("generating_revision", writer=writer_slug, critic=critic_slug)
             original_essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
             feedback = await self.store.load_feedback(topic_slug, writer_slug, critic_slug)
-            revised = await self.client.complete_prompt(
+            revised = await complete_from_prompts(
+                self.client,
                 writer_model_id,
                 revision_system_prompt(),
                 revision_user_prompt(original_essay, feedback),

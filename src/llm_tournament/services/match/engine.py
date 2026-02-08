@@ -29,7 +29,7 @@ from llm_tournament.prompts import (
     judge_system_prompt,
     judge_user_prompt,
 )
-from llm_tournament.services.llm import LLMClient
+from llm_tournament.services.llm import LLMClient, complete_from_prompts
 
 logger = structlog.get_logger()
 
@@ -176,7 +176,8 @@ async def _request_judgment(
     """
     system_prompt = context.custom_judge_system_prompt or judge_system_prompt()
     user_prompt = _build_judge_user_prompt(context, strict)
-    response = await client.complete_prompt(
+    response = await complete_from_prompts(
+        client,
         judge_model,
         system_prompt,
         user_prompt,
