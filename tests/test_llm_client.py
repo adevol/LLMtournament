@@ -41,6 +41,11 @@ class TestFakeLLMClient:
         await client.complete("test", [{"role": "user", "content": "hello"}], 100, 0.7)
         assert client.call_count == 2
 
+    def test_cost_tracking_disabled(self):
+        """Fake client does not support API cost tracking."""
+        client = FakeLLMClient(seed=42)
+        assert client.cost_tracking_enabled is False
+
     async def test_essay_response_structure(self):
         """Test fake essay contains expected content."""
         client = FakeLLMClient(seed=42)
@@ -184,5 +189,14 @@ class TestOpenRouterClientRetry:
             )
             assert result.content == "ok"
             assert post_mock.await_count == 2
+        finally:
+            await client.close()
+
+    async def test_openrouter_cost_tracking_flag_without_tracker(self):
+        """OpenRouter client exposes disabled cost tracking by default."""
+        client = OpenRouterClient(api_key="test-key")
+        try:
+            assert client.cost_tracking_enabled is False
+            assert client.total_cost == 0.0
         finally:
             await client.close()

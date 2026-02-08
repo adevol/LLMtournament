@@ -76,7 +76,12 @@ class LLMClient(ABC):
     @property
     @abstractmethod
     def total_cost(self) -> float:
-        """Return total cost of all API calls made by this client."""
+        """Return total tracked cost of API calls made by this client."""
+
+    @property
+    def cost_tracking_enabled(self) -> bool:
+        """Whether this client instance is configured to track API cost."""
+        return False
 
     async def close(self) -> None:  # noqa: B027
         """Close any resources. Override if needed."""
@@ -211,8 +216,13 @@ class OpenRouterClient(LLMClient):
 
     @property
     def total_cost(self) -> float:
-        """Return total accumulated cost."""
+        """Return total accumulated tracked cost."""
         return self._total_cost
+
+    @property
+    def cost_tracking_enabled(self) -> bool:
+        """Whether call cost tracking is configured."""
+        return self.cost_tracker is not None
 
     async def complete(
         self,
