@@ -1,6 +1,7 @@
 """Tests for fake LLM client behavior."""
 
 import json
+import random
 from unittest.mock import AsyncMock
 
 import httpx
@@ -67,6 +68,20 @@ class TestFakeLLMClient:
         assert 0 <= data["confidence"] <= 1
         assert isinstance(data["reasons"], list)
         assert "winner_edge" in data
+
+    async def test_judgment_does_not_mutate_global_random_state(self):
+        """Fake judgment generation should not alter global random state."""
+        client = FakeLLMClient(seed=42)
+        messages = [{"role": "user", "content": "compare winner"}]
+
+        random.seed(98765)
+        expected_next = random.random()  # noqa: S311
+
+        random.seed(98765)
+        await client.complete("test", messages, 100, 0.7)
+        actual_next = random.random()  # noqa: S311
+
+        assert actual_next == expected_next
 
 
 class TestOpenRouterClientRetry:

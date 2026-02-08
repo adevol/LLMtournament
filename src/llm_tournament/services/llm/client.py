@@ -93,6 +93,7 @@ class FakeLLMClient(LLMClient):
         """
         self.seed = seed
         self.call_count = 0
+        self._rng = random.Random(seed)  # noqa: S311
 
     @property
     def total_cost(self) -> float:
@@ -164,9 +165,8 @@ class FakeLLMClient(LLMClient):
     def _fake_judgment(self) -> str:
         """Generate fake judgment JSON."""
         templates = _load_fake_responses()
-        random.seed(self.seed + self.call_count)
-        winner = random.choice(["A", "B"])  # noqa: S311
-        confidence = round(random.uniform(0.6, 0.95), 2)  # noqa: S311
+        winner = self._rng.choice(["A", "B"])
+        confidence = round(self._rng.uniform(0.6, 0.95), 2)
         judgment = templates["judgment"]
         return json.dumps(
             {
