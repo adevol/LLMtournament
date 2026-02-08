@@ -270,15 +270,6 @@ class OpenRouterClient(LLMClient):
         max_tokens: int,
         temperature: float,
     ) -> LLMResponse:
-        response: LLMResponse | None = None
-
-        async def _attempt_call() -> LLMResponse:
-            nonlocal response
-            response = await self._call_api(model, messages, max_tokens, temperature)
-            if not response.content.strip():
-                raise _IncompleteResponseError()
-            return response
-
         retrying = AsyncRetrying(
             retry=retry_if_exception_type(_IncompleteResponseError),
             wait=wait_fixed(0),
@@ -287,11 +278,12 @@ class OpenRouterClient(LLMClient):
         )
         async for attempt in retrying:
             with attempt:
-                await _attempt_call()
+                response = await self._call_api(model, messages, max_tokens, temperature)
+                if not response.content.strip():
+                    raise _IncompleteResponseError()
+                return response
 
-        if response is None:
-            raise _IncompleteResponseError()
-        return response
+        raise _IncompleteResponseError()
 
     @retry(
         stop=stop_after_attempt(3),

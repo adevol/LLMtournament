@@ -8,7 +8,12 @@ import httpx
 import pytest
 from tenacity import RetryError
 
-from llm_tournament.services.llm.client import FakeLLMClient, LLMResponse, OpenRouterClient
+from llm_tournament.services.llm.client import (
+    FakeLLMClient,
+    LLMResponse,
+    OpenRouterClient,
+    _IncompleteResponseError,
+)
 
 
 class TestFakeLLMClient:
@@ -198,5 +203,63 @@ class TestOpenRouterClientRetry:
         try:
             assert client.cost_tracking_enabled is False
             assert client.total_cost == 0.0
+        finally:
+            await client.close()
+
+    async def test_openrouter_retries_on_incomplete_response_then_succeeds(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Retries blank completions and returns first non-empty completion."""
+        client = OpenRouterClient(api_key="test-key")
+        incomplete = LLMResponse(
+            content="   ",
+            prompt_tokens=1,
+            completion_tokens=0,
+            total_tokens=1,
+        )
+        complete = LLMResponse(
+            content="ok",
+            prompt_tokens=1,
+            completion_tokens=1,
+            total_tokens=2,
+        )
+        call_api_mock = AsyncMock(side_effect=[incomplete, complete])
+        monkeypatch.setattr(client, "_call_api", call_api_mock)
+
+        try:
+            result = await client.complete(
+                "test/model",
+                [{"role": "user", "content": "hello"}],
+                100,
+                0.7,
+            )
+            assert result.content == "ok"
+            assert call_api_mock.await_count == 2
+        finally:
+            await client.close()
+
+    async def test_openrouter_incomplete_response_exhausts_retries(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Raises when all attempts return empty content."""
+        client = OpenRouterClient(api_key="test-key")
+        incomplete = LLMResponse(
+            content="",
+            prompt_tokens=1,
+            completion_tokens=0,
+            total_tokens=1,
+        )
+        call_api_mock = AsyncMock(side_effect=[incomplete, incomplete, incomplete])
+        monkeypatch.setattr(client, "_call_api", call_api_mock)
+
+        try:
+            with pytest.raises(_IncompleteResponseError):
+                await client.complete(
+                    "test/model",
+                    [{"role": "user", "content": "hello"}],
+                    100,
+                    0.7,
+                )
+            assert call_api_mock.await_count == 3
         finally:
             await client.close()
