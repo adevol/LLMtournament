@@ -47,7 +47,7 @@ class TournamentProgress:
             None.
         """
         with Progress(
-            SpinnerColumn(),
+            SpinnerColumn("line"),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
@@ -77,7 +77,7 @@ class TournamentProgress:
             None.
         """
         with Progress(
-            SpinnerColumn(),
+            SpinnerColumn("line"),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
