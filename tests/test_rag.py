@@ -9,7 +9,7 @@ import pytest
 from llm_tournament.core.config import TopicConfig, TournamentConfig, WriterConfig
 from llm_tournament.prompts import writer_system_prompt
 from llm_tournament.rag import RAGSystem, Retriever, build_rag_context, chunk_text
-from llm_tournament.services.llm.client import LLMResponse
+from llm_tournament.services.llm.client import LLMMessages, LLMResponse
 from llm_tournament.services.submission import SubmissionService
 
 
@@ -107,7 +107,7 @@ class CapturingLLMClient:
     """LLM client stub that captures messages for assertions."""
 
     def __init__(self) -> None:
-        self.messages: list[list[dict[str, str]]] = []
+        self.messages: list[LLMMessages] = []
 
     @property
     def total_cost(self) -> float:
@@ -116,7 +116,7 @@ class CapturingLLMClient:
     async def complete(
         self,
         _model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         _max_tokens: int,
         _temperature: float,
     ) -> LLMResponse:

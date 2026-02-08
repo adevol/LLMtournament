@@ -29,7 +29,7 @@ from llm_tournament.prompts import (
     judge_system_prompt,
     judge_user_prompt,
 )
-from llm_tournament.services.llm import LLMClient
+from llm_tournament.services.llm import LLMClient, LLMMessages
 
 logger = structlog.get_logger()
 
@@ -143,7 +143,7 @@ def repair_json(broken_json: str) -> str:
     return text.replace("'", '"')
 
 
-def _build_judge_messages(context: MatchContext, strict: bool) -> list[dict[str, str]]:
+def _build_judge_messages(context: MatchContext, strict: bool) -> LLMMessages:
     """Build judge messages for a judgment request.
 
     Args:

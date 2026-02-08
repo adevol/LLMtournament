@@ -7,7 +7,7 @@ import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias, TypedDict
 
 import httpx
 import structlog
@@ -26,6 +26,16 @@ from llm_tournament.services.llm.cost_tracker import CostTracker
 logger = structlog.get_logger()
 
 _FAKE_RESPONSES_PATH = Path(__file__).parent / "fake_responses.yaml"
+
+
+class LLMMessage(TypedDict):
+    """Single chat message entry for LLM APIs."""
+
+    role: str
+    content: str
+
+
+LLMMessages: TypeAlias = list[LLMMessage]
 
 
 @dataclass(frozen=True)
@@ -57,7 +67,7 @@ class LLMClient(ABC):
     async def complete(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         max_tokens: int,
         temperature: float,
     ) -> LLMResponse:
@@ -108,7 +118,7 @@ class FakeLLMClient(LLMClient):
     async def complete(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         _max_tokens: int,
         _temperature: float,
     ) -> LLMResponse:
@@ -228,7 +238,7 @@ class OpenRouterClient(LLMClient):
     async def complete(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         max_tokens: int,
         temperature: float,
     ) -> LLMResponse:
@@ -267,7 +277,7 @@ class OpenRouterClient(LLMClient):
     async def _call_with_retries(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         max_tokens: int,
         temperature: float,
     ) -> LLMResponse:
@@ -294,7 +304,7 @@ class OpenRouterClient(LLMClient):
     async def _call_api(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         max_tokens: int,
         temperature: float,
     ) -> LLMResponse:
@@ -344,7 +354,7 @@ class OpenRouterClient(LLMClient):
     @staticmethod
     def _request_payload(
         model: str,
-        messages: list[dict[str, str]],
+        messages: LLMMessages,
         max_tokens: int,
         temperature: float,
     ) -> dict[str, Any]:

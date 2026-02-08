@@ -14,7 +14,7 @@ from llm_tournament.prompts import (
     writer_user_prompt,
 )
 from llm_tournament.rag import build_rag_context
-from llm_tournament.services.llm import LLMClient
+from llm_tournament.services.llm import LLMClient, LLMMessages
 from llm_tournament.services.storage import TournamentStore
 
 logger = structlog.get_logger()
@@ -79,7 +79,7 @@ class SubmissionService:
                         rag_context = build_rag_context(self.config.retriever, rag_query)
                         effective_system_prompt = f"{rag_context}\n\n{base_system_prompt}"
 
-                messages = [
+                messages: LLMMessages = [
                     {"role": "system", "content": effective_system_prompt},
                     {"role": "user", "content": prompt},
                 ]
@@ -123,7 +123,7 @@ class SubmissionService:
         async with self._semaphore:
             logger.debug("generating_critique", writer=writer_slug, critic=critic_slug)
             essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
-            messages = [
+            messages: LLMMessages = [
                 {"role": "system", "content": critic_system_prompt()},
                 {"role": "user", "content": critic_user_prompt(essay)},
             ]
@@ -157,7 +157,7 @@ class SubmissionService:
             logger.debug("generating_revision", writer=writer_slug, critic=critic_slug)
             original_essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
             feedback = await self.store.load_feedback(topic_slug, writer_slug, critic_slug)
-            messages = [
+            messages: LLMMessages = [
                 {"role": "system", "content": revision_system_prompt()},
                 {
                     "role": "user",
