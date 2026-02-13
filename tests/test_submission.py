@@ -20,6 +20,7 @@ class _AlwaysIncompleteClient(LLMClient):
 
 class _SubmissionStoreStub:
     def __init__(self) -> None:
+        self.essays = self
         self.feedback_saved: list[str] = []
         self.revision_saved: list[str] = []
 

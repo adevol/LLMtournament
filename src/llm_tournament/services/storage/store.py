@@ -6,7 +6,6 @@ import gc
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import structlog
 import yaml
@@ -86,61 +85,6 @@ class TournamentStore:
         metadata_path = self.base_dir / "run_metadata.json"
         with metadata_path.open("w") as f:
             json.dump(metadata, f, indent=2)
-
-    # ==================== Backward-compat facade ====================
-
-    def topic_dir(self, topic_slug: str) -> Path:
-        return self.paths.topic_dir(topic_slug)
-
-    async def save_essay(
-        self, topic_slug: str, writer_slug: str, content: str, version: str
-    ) -> Path:
-        return await self.essays.save_essay(topic_slug, writer_slug, content, version)
-
-    async def load_essay(self, topic_slug: str, essay_id: str, version: str) -> str:
-        return await self.essays.load_essay(topic_slug, essay_id, version)
-
-    async def save_feedback(
-        self, topic_slug: str, writer_slug: str, critic_slug: str, content: str
-    ) -> Path:
-        return await self.essays.save_feedback(topic_slug, writer_slug, critic_slug, content)
-
-    async def load_feedback(self, topic_slug: str, writer_slug: str, critic_slug: str) -> str:
-        return await self.essays.load_feedback(topic_slug, writer_slug, critic_slug)
-
-    async def save_revision(
-        self, topic_slug: str, writer_slug: str, critic_slug: str, content: str
-    ) -> Path:
-        return await self.essays.save_revision(topic_slug, writer_slug, critic_slug, content)
-
-    async def save_match(self, topic_slug: str, match_data: Any) -> None:
-        await self.matches.save_match(topic_slug, match_data)
-
-    async def get_matches_for_essay(self, topic_slug: str, essay_id: str) -> list[dict[str, Any]]:
-        return await self.matches.get_matches_for_essay(topic_slug, essay_id)
-
-    async def save_rating(self, topic_slug: str, rating_data: Any) -> None:
-        await self.ratings.save_rating(topic_slug, rating_data)
-
-    async def get_leaderboard(self, topic_slug: str) -> list[Any]:
-        return await self.ratings.get_leaderboard(topic_slug)
-
-    async def get_all_ratings(self) -> list[Any]:
-        return await self.ratings.get_all_ratings()
-
-    async def save_report(self, topic_slug: str, filename: str, content: str) -> None:
-        await self.reports.save_topic_report(topic_slug, filename, content)
-
-    async def save_ranking_output(
-        self, topic_slug: str, leaderboard: list[Any], ranking_system: Any
-    ) -> None:
-        await self.reports.save_ranking_output(topic_slug, leaderboard, ranking_system)
-
-    async def export_to_json(self, topic_slug: str, leaderboard: list[Any]) -> None:
-        await self.reports.export_to_json(topic_slug, leaderboard)
-
-    async def save_aggregation_report(self, filename: str, content: str) -> None:
-        await self.reports.save_aggregation_report(filename, content)
 
     # ==================== Lifecycle ====================
 

@@ -95,7 +95,7 @@ class AnalysisService:
         Args:
             topic_slug: Topic slug.
         """
-        leaderboard = await self.store.get_leaderboard(topic_slug)
+        leaderboard = await self.store.ratings.get_leaderboard(topic_slug)
 
         if not leaderboard:
             logger.warning("no_leaderboard_for_analysis", topic=topic_slug)
@@ -113,7 +113,7 @@ class AnalysisService:
         """
         async with self._semaphore:
             essay_id = rating.candidate_id
-            matches = await self.store.get_matches_for_essay(topic_slug, essay_id)
+            matches = await self.store.matches.get_matches_for_essay(topic_slug, essay_id)
 
             if not matches:
                 return
@@ -128,7 +128,7 @@ class AnalysisService:
                 self.config.judge_temp,
             )
             safe_essay_id = self._slugger.safe_id(essay_id)
-            await self.store.save_report(
+            await self.store.reports.save_topic_report(
                 topic_slug, f"analysis_{safe_essay_id}.md", analysis.content
             )
 
@@ -136,13 +136,13 @@ class AnalysisService:
 
     async def run_aggregation(self) -> None:
         """Run complete set of cross-topic aggregation tasks."""
-        ratings = await self.store.get_all_ratings()
+        ratings = await self.store.ratings.get_all_ratings()
         if not ratings:
             logger.warning("no_ratings_for_aggregation")
             return
 
         ranking_summary, model_results = self._compute_aggregates(ratings)
-        await self.store.save_aggregation_report("aggregate_ranking.md", ranking_summary)
+        await self.store.reports.save_aggregation_report("aggregate_ranking.md", ranking_summary)
 
         await self._generate_model_profiles(model_results)
         await self._generate_cross_topic_insights(ranking_summary)
@@ -207,7 +207,7 @@ class AnalysisService:
             )
             safe_model_id = self._slugger.safe_id(model_id)
             filename = f"model_profiles/{safe_model_id}.json"
-            await self.store.save_aggregation_report(filename, response.content)
+            await self.store.reports.save_aggregation_report(filename, response.content)
 
     async def _generate_cross_topic_insights(self, ranking_summary: str) -> None:
         """Generate high-level tournament insights."""
@@ -222,4 +222,7 @@ class AnalysisService:
                 self.config.judge_temp,
             )
 
-            await self.store.save_aggregation_report("cross_topic_insights.json", response.content)
+            await self.store.reports.save_aggregation_report(
+                "cross_topic_insights.json",
+                response.content,
+            )

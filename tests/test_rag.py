@@ -129,6 +129,7 @@ class DummyStore:
     """Store stub that records essays without touching disk."""
 
     def __init__(self) -> None:
+        self.essays = self
         self.saved: list[tuple[str, str, str, str]] = []
 
     async def save_essay(

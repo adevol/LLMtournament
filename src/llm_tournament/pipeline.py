@@ -167,10 +167,10 @@ class TournamentPipeline:
         )
 
         for rating_obj in rating_objects:
-            await self.store.save_rating(topic_slug, rating_obj)
+            await self.store.ratings.save_rating(topic_slug, rating_obj)
 
-        await self.store.save_ranking_output(topic_slug, rating_objects, ranking_system)
-        await self.store.export_to_json(topic_slug, rating_objects)
+        await self.store.reports.save_ranking_output(topic_slug, rating_objects, ranking_system)
+        await self.store.reports.export_to_json(topic_slug, rating_objects)
 
     async def _save_aggregates(
         self,
@@ -187,7 +187,7 @@ class TournamentPipeline:
             headers=("Writer", "Mean Rating", "Variants"),
             max_slug_length=self.config.slug_max_length,
         )
-        await self.store.save_report(topic_slug, "writer_aggregate.md", writer_report)
+        await self.store.reports.save_topic_report(topic_slug, "writer_aggregate.md", writer_report)
 
         if not self.config.simple_mode:
             critic_report = generate_aggregate_report(
@@ -199,7 +199,11 @@ class TournamentPipeline:
                 max_slug_length=self.config.slug_max_length,
                 description="Mean rating of essays revised using each critic's feedback.",
             )
-            await self.store.save_report(topic_slug, "critic_metrics.md", critic_report)
+            await self.store.reports.save_topic_report(
+                topic_slug,
+                "critic_metrics.md",
+                critic_report,
+            )
 
 
 async def run_tournament(

@@ -125,7 +125,7 @@ class SubmissionService:
             full_text_parts.append(f"## {genre}\n\n{content}")
 
         full_essay = "\n\n".join(full_text_parts)
-        await self.store.save_essay(topic.slug, writer_slug, full_essay, "v0")
+        await self.store.essays.save_essay(topic.slug, writer_slug, full_essay, "v0")
 
     async def run_critique_batch(
         self,
@@ -147,7 +147,7 @@ class SubmissionService:
     ) -> None:
         async with self._semaphore:
             logger.debug("generating_critique", writer=writer_slug, critic=critic_slug)
-            essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
+            essay = await self.store.essays.load_essay(topic_slug, writer_slug, "v0")
             try:
                 feedback_text = await self._complete_prompt_text(
                     critic_id,
@@ -167,7 +167,12 @@ class SubmissionService:
                     "For revision, preserve strengths and improve structure, clarity, and "
                     "specificity with concrete details."
                 )
-            await self.store.save_feedback(topic_slug, writer_slug, critic_slug, feedback_text)
+            await self.store.essays.save_feedback(
+                topic_slug,
+                writer_slug,
+                critic_slug,
+                feedback_text,
+            )
 
     async def run_revision_batch(
         self,
@@ -189,8 +194,8 @@ class SubmissionService:
     ) -> None:
         async with self._semaphore:
             logger.debug("generating_revision", writer=writer_slug, critic=critic_slug)
-            original_essay = await self.store.load_essay(topic_slug, writer_slug, "v0")
-            feedback = await self.store.load_feedback(topic_slug, writer_slug, critic_slug)
+            original_essay = await self.store.essays.load_essay(topic_slug, writer_slug, "v0")
+            feedback = await self.store.essays.load_feedback(topic_slug, writer_slug, critic_slug)
             try:
                 revised_text = await self._complete_prompt_text(
                     writer_model_id,
@@ -206,4 +211,9 @@ class SubmissionService:
                     critic=critic_slug,
                 )
                 revised_text = original_essay
-            await self.store.save_revision(topic_slug, writer_slug, critic_slug, revised_text)
+            await self.store.essays.save_revision(
+                topic_slug,
+                writer_slug,
+                critic_slug,
+                revised_text,
+            )
