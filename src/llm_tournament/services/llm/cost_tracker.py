@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 import structlog
 from sqlmodel import Session, func, select
 
 from llm_tournament.models import LLMCall
+from llm_tournament.services.storage.repository import AsyncRepository
 
 from .pricing import PricingService
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 
-class CostTracker:
+class CostTracker(AsyncRepository):
     """Tracks and computes costs for LLM API calls.
 
     Usage:
@@ -34,8 +34,8 @@ class CostTracker:
             pricing_service: Service providing model pricing data.
             engine: SQLAlchemy engine for database operations.
         """
+        super().__init__(engine)
         self._pricing = pricing_service
-        self._engine = engine
 
     async def record_call(
         self,
@@ -75,12 +75,11 @@ class CostTracker:
             cost_usd=cost_usd,
         )
 
-        def _save() -> None:
-            with Session(self._engine) as session:
-                session.add(call)
-                session.commit()
+        def _save(session: Session) -> None:
+            session.add(call)
+            session.commit()
 
-        await asyncio.to_thread(_save)
+        await self._run_session(_save)
 
         logger.debug(
             "cost_recorded",
@@ -98,13 +97,12 @@ class CostTracker:
             Dictionary mapping role to total USD spend.
         """
 
-        def _query() -> dict[str, float]:
-            with Session(self._engine) as session:
-                statement = select(LLMCall.role, func.sum(LLMCall.cost_usd)).group_by(LLMCall.role)
-                results = session.exec(statement).all()
-                return {role: float(cost) for role, cost in results}
+        def _query(session: Session) -> dict[str, float]:
+            statement = select(LLMCall.role, func.sum(LLMCall.cost_usd)).group_by(LLMCall.role)
+            results = session.exec(statement).all()
+            return {role: float(cost) for role, cost in results}
 
-        return await asyncio.to_thread(_query)
+        return await self._run_session(_query)
 
     async def get_model_costs(self) -> dict[str, float]:
         """Get total spend grouped by model.
@@ -113,15 +111,12 @@ class CostTracker:
             Dictionary mapping model ID to total USD spend.
         """
 
-        def _query() -> dict[str, float]:
-            with Session(self._engine) as session:
-                statement = select(LLMCall.model, func.sum(LLMCall.cost_usd)).group_by(
-                    LLMCall.model
-                )
-                results = session.exec(statement).all()
-                return {model: float(cost) for model, cost in results}
+        def _query(session: Session) -> dict[str, float]:
+            statement = select(LLMCall.model, func.sum(LLMCall.cost_usd)).group_by(LLMCall.model)
+            results = session.exec(statement).all()
+            return {model: float(cost) for model, cost in results}
 
-        return await asyncio.to_thread(_query)
+        return await self._run_session(_query)
 
     async def get_total_cost(self) -> float:
         """Get total spend across all calls.
@@ -130,13 +125,12 @@ class CostTracker:
             Total cost in USD.
         """
 
-        def _query() -> float:
-            with Session(self._engine) as session:
-                statement = select(func.sum(LLMCall.cost_usd))
-                result = session.exec(statement).one_or_none()
-                return float(result) if result else 0.0
+        def _query(session: Session) -> float:
+            statement = select(func.sum(LLMCall.cost_usd))
+            result = session.exec(statement).one_or_none()
+            return float(result) if result else 0.0
 
-        return await asyncio.to_thread(_query)
+        return await self._run_session(_query)
 
     async def get_topic_costs(self) -> dict[str, float]:
         """Get total spend grouped by topic.
@@ -145,14 +139,13 @@ class CostTracker:
             Dictionary mapping topic_slug to total USD spend.
         """
 
-        def _query() -> dict[str, float]:
-            with Session(self._engine) as session:
-                statement = (
-                    select(LLMCall.topic_slug, func.sum(LLMCall.cost_usd))
-                    .where(LLMCall.topic_slug.is_not(None))
-                    .group_by(LLMCall.topic_slug)
-                )
-                results = session.exec(statement).all()
-                return {topic: float(cost) for topic, cost in results}
+        def _query(session: Session) -> dict[str, float]:
+            statement = (
+                select(LLMCall.topic_slug, func.sum(LLMCall.cost_usd))
+                .where(LLMCall.topic_slug.is_not(None))
+                .group_by(LLMCall.topic_slug)
+            )
+            results = session.exec(statement).all()
+            return {topic: float(cost) for topic, cost in results}
 
-        return await asyncio.to_thread(_query)
+        return await self._run_session(_query)

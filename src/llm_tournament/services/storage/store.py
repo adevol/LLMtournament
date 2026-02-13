@@ -18,6 +18,7 @@ from sqlmodel import Session, SQLModel, col, create_engine, select
 from llm_tournament import __version__
 from llm_tournament.core.config import TournamentConfig
 from llm_tournament.models import Match, Rating
+from llm_tournament.services.storage.repository import AsyncRepository
 
 logger = structlog.get_logger()
 
@@ -58,6 +59,7 @@ class TournamentStore:
         self.base_dir = Path(config.output_dir) / self.run_id
         self._db_path = self.base_dir / "tournament.duckdb"
         self._engine = None
+        self._repository: AsyncRepository[Any] | None = None
         self._init_directories()
         self._init_db()
         self._save_metadata()
@@ -72,7 +74,13 @@ class TournamentStore:
         db_url = f"duckdb:///{self._db_path}"
         # Use NullPool to avoid connection pooling issues on Windows
         self._engine = create_engine(db_url, poolclass=NullPool)
+        self._repository = AsyncRepository(self._engine)
         SQLModel.metadata.create_all(self._engine)
+
+    def _get_repository(self) -> AsyncRepository[Any]:
+        if self._repository is None:
+            raise RuntimeError("Database repository is not initialized")
+        return self._repository
 
     def _save_metadata(self) -> None:
         """Save config snapshot and run metadata."""
@@ -201,31 +209,32 @@ class TournamentStore:
 
         data["reasons"] = _normalize_reasons(data.get("reasons"))
 
-        def _save() -> None:
-            with Session(self._engine) as session:
-                match = Match.model_validate(data)
-                session.add(match)
-                session.commit()
+        def _db_save(session: Session) -> None:
+            match = Match.model_validate(data)
+            session.add(match)
+            session.commit()
 
+        await self._get_repository()._run_session(_db_save)
+
+        def _save_jsonl() -> None:
             jsonl_path = self._ranking_path(topic_slug, "matches.jsonl")
             with jsonl_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(data, default=str) + "\n")
 
-        await asyncio.to_thread(_save)
+        await asyncio.to_thread(_save_jsonl)
 
     async def get_matches_for_essay(self, topic_slug: str, essay_id: str) -> list[dict[str, Any]]:
         """Get all matches involving an essay."""
 
-        def _get() -> list[dict[str, Any]]:
-            with Session(self._engine) as session:
-                statement = select(Match).where(
-                    Match.topic_slug == topic_slug,
-                    (Match.essay_a_id == essay_id) | (Match.essay_b_id == essay_id),
-                )
-                results = session.exec(statement).all()
-                return [m.model_dump() for m in results]
+        def _get(session: Session) -> list[dict[str, Any]]:
+            statement = select(Match).where(
+                Match.topic_slug == topic_slug,
+                (Match.essay_a_id == essay_id) | (Match.essay_b_id == essay_id),
+            )
+            results = session.exec(statement).all()
+            return [m.model_dump() for m in results]
 
-        return await asyncio.to_thread(_get)
+        return await self._get_repository()._run_session(_get)
 
     async def save_rating(self, topic_slug: str, rating_data: Any) -> None:
         """Save or update a rating in the database."""
@@ -234,49 +243,46 @@ class TournamentStore:
         if "topic_slug" not in data:
             data["topic_slug"] = topic_slug
 
-        def _save() -> None:
-            with Session(self._engine) as session:
-                statement = select(Rating).where(
-                    Rating.topic_slug == topic_slug,
-                    Rating.candidate_id == data["candidate_id"],
-                )
-                existing = session.exec(statement).first()
-                if existing:
-                    for key, value in data.items():
-                        setattr(existing, key, value)
-                    session.add(existing)
-                else:
-                    rating = Rating.model_validate(data)
-                    session.add(rating)
-                session.commit()
+        def _save(session: Session) -> None:
+            statement = select(Rating).where(
+                Rating.topic_slug == topic_slug,
+                Rating.candidate_id == data["candidate_id"],
+            )
+            existing = session.exec(statement).first()
+            if existing:
+                for key, value in data.items():
+                    setattr(existing, key, value)
+                session.add(existing)
+            else:
+                rating = Rating.model_validate(data)
+                session.add(rating)
+            session.commit()
 
-        await asyncio.to_thread(_save)
+        await self._get_repository()._run_session(_save)
 
     async def get_leaderboard(self, topic_slug: str) -> list[Any]:
         """Get leaderboard sorted by rating."""
 
-        def _get() -> list[Any]:
-            with Session(self._engine) as session:
-                statement = (
-                    select(Rating)
-                    .where(Rating.topic_slug == topic_slug)
-                    .order_by(col(Rating.rating).desc())
-                )
-                results = session.exec(statement).all()
-                return list(results)
+        def _get(session: Session) -> list[Any]:
+            statement = (
+                select(Rating)
+                .where(Rating.topic_slug == topic_slug)
+                .order_by(col(Rating.rating).desc())
+            )
+            results = session.exec(statement).all()
+            return list(results)
 
-        return await asyncio.to_thread(_get)
+        return await self._get_repository()._run_session(_get)
 
     async def get_all_ratings(self) -> list[Any]:
         """Get all ratings across all topics."""
 
-        def _get() -> list[Any]:
-            with Session(self._engine) as session:
-                statement = select(Rating)
-                results = session.exec(statement).all()
-                return list(results)
+        def _get(session: Session) -> list[Any]:
+            statement = select(Rating)
+            results = session.exec(statement).all()
+            return list(results)
 
-        return await asyncio.to_thread(_get)
+        return await self._get_repository()._run_session(_get)
 
     # ==================== Report operations ====================
 
